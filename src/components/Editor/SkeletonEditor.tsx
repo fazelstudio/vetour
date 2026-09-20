@@ -1,8 +1,16 @@
+/*-----------------------------------------------------------------------------------------------
+ *  Copyright (c) Zulfazli (fazelstudio). All rights reserved.
+ *  Licensed under the MIT License. See LICENSE file in the project root for license information.
+ *
+ *  SkeletonEditor.tsx
+ *  Loading placeholder that mirrors the editor layout.
+ *-----------------------------------------------------------------------------------------------*/
+
 export const SkeletonEditor = () => {
   const bar = "bg-border/50 animate-pulse rounded";
   return (
     <div className="flex flex-col h-full w-full bg-background overflow-hidden select-none pointer-events-none">
-      {/* Toolbar */}
+      {/* Toolbar placeholder. */}
       <div className="h-14 border-b border-border flex items-center justify-between px-4 shrink-0 bg-card z-10 relative">
         <div className="flex items-center gap-2">
           <div className={`w-20 h-8 ${bar}`} />
@@ -17,7 +25,7 @@ export const SkeletonEditor = () => {
       </div>
 
       <div className="flex flex-1 w-full overflow-hidden">
-        {/* Sidebar */}
+        {/* Sidebar placeholder. */}
         <div className="shrink-0 flex flex-col bg-surface border-r border-border py-3 px-3 gap-1 w-[200px]">
           <div className={`w-full h-10 ${bar}`} />
           <div className={`w-full h-10 ${bar}`} />
@@ -25,10 +33,10 @@ export const SkeletonEditor = () => {
           <div className={`w-full h-10 ${bar}`} />
         </div>
 
-        {/* Panorama Page */}
+        {/* Panorama workspace placeholder. */}
         <div className="flex h-full w-full bg-background overflow-hidden">
           <div className="flex flex-col flex-1 overflow-hidden">
-            {/* Center: Preview Area */}
+            {/* Center: preview placeholder. */}
             <div className="flex-1 relative bg-background overflow-hidden min-h-0 flex items-center justify-center">
               <div className="flex flex-col items-center gap-3">
                 <svg className="w-8 h-8 text-primary animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -39,7 +47,7 @@ export const SkeletonEditor = () => {
               </div>
             </div>
 
-            {/* Panorama Cards Strip */}
+            {/* Panorama cards placeholder. */}
             <div className="shrink-0 border-t border-border bg-surface">
               <div className="flex items-center gap-2 px-4 py-2 border-b border-border h-10">
                 <div className={`w-24 h-4 ${bar}`} />
@@ -54,7 +62,7 @@ export const SkeletonEditor = () => {
             </div>
           </div>
 
-          {/* Right: Properties Panel */}
+          {/* Right: properties panel placeholder. */}
           <div className="w-80 shrink-0 border-l border-border bg-card flex flex-col">
             <div className="p-4 border-b border-border font-medium text-text-primary h-[53px] flex items-center">
               <div className={`w-32 h-5 ${bar}`} />

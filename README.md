@@ -36,14 +36,21 @@
 - **File Locking** — Safe concurrent access to project files across windows.
 - **Drag & Drop Hotspots** — Reposition markers by dragging in the viewer.
 - **Theme Support** — Light, dark, and black themes.
-
-> Note: The deploy/publishing feature is maintained as a separate private module and is not included in this open-source build.
+- **Command Architecture** — Every editor action runs through a typed
+  command registry consumed by the UI and by extensions.
+- **Extension SDK** — Namespaced `vetour-sdk` API (`commands`, `window`,
+  `workspace`, `tour`, `present`, `media`, `extensions`) with contribution
+  points (menus, panels, hotspot/document renderers, validation rules).
+- **Official Plugin Files (.veix)** — Versioned, validated plugin packages;
+  only official publisher files pass the installer gate.
+- **Project Diagnostics** — Detect missing panoramas, broken links, duplicate
+  scene IDs, and unreachable scenes.
 
 ## Prerequisites
 
 Before you begin, ensure you have the following installed:
 
-- **Bun** 1.x (or Node.js 22+ with npm/pnpm/yarn)
+- **Bun** 1.x (mandatory package manager — never npm/yarn/pnpm)
 - **Rust** 1.85+ (via [rustup](https://rustup.rs/))
 - **System dependencies** for [Tauri 2](https://v2.tauri.app/start/prerequisites/)
 
@@ -51,10 +58,10 @@ Before you begin, ensure you have the following installed:
 
 ```bash
 # Clone the repository
-git clone https://github.com/fazelllyyy/vetour.git
+git clone https://github.com/fazelstudio/vetour.git
 cd vetour
 
-# Install JavaScript dependencies (also downloads ffmpeg sidecar)
+# Install JavaScript dependencies (downloads a local FFmpeg copy for development only)
 bun install
 
 # Run the app in development mode
@@ -63,16 +70,17 @@ bun run tauri dev
 
 The app will launch with hot-reload enabled. The Tauri window will open automatically once the Vite dev server is ready on port 1420.
 
-### FFmpeg Sidecar
+### Media Optimization (FFmpeg)
 
-Audio/video conversion requires **ffmpeg** as a Tauri sidecar. During `bun install`, the `postinstall` hook automatically downloads the correct binary for your platform.
+The installer ships **without** FFmpeg to keep downloads small. Users can install it on demand:
 
-**Download priority:**
-1. [GitHub Release assets](https://github.com/fazelllyyy/vetour/releases) — direct binary, no extraction needed
-2. Canonical sources (gyan.dev, evermeet.cx, johnvansickle.com) — extracted automatically
-3. System `ffmpeg` in `PATH`
+1. Open **Settings > Media Optimization**.
+2. Select **Download FFmpeg** (one-time download, about 25–80 MB depending on the system) or **Use local file…** to reuse an FFmpeg binary already on your device (any file name works; it is validated and copied automatically).
+3. The exact download package for your system is shown upfront (Windows x64/ARM64, macOS Intel, Linux x64/ARM64). Platforms without a published binary yet show a clear notice instead — macOS ARM users should use a local file for now.
+4. Progress is shown in Settings. If the connection drops, select Download again to resume.
+5. It can be removed at any time from the same screen. Without it, original audio/video files are used as-is.
 
-> First-time setup: Create a GitHub Release (`v1.0.0`) and upload the ffmpeg binaries as release assets. This enables the fastest download path for all users.
+For development, `bun install` downloads a local FFmpeg copy via the `postinstall` hook (not bundled into the installer). Binaries are fetched from the `ffmpeg-sidecar-v1` GitHub Release, with canonical sources as fallback.
 
 ### Available Scripts
 
@@ -82,9 +90,10 @@ Audio/video conversion requires **ffmpeg** as a Tauri sidecar. During `bun insta
 | `bun run build`          | Build the frontend for production               |
 | `bun run tauri dev`      | Run the full Tauri desktop app in dev mode      |
 | `bun run tauri build`    | Build the desktop app for distribution          |
-| `bun run check`          | Run TypeScript type checking                    |
+| `bun run check`          | Run TypeScript type checking (app + SDK)      |
 | `bun run lint`           | Run ESLint on all source files                  |
-| `bun run sidecar:download` | Manually download/re-download the ffmpeg sidecar |
+| `bun run sidecar:download` | Download a local FFmpeg copy for development |
+| `bun run sdk:test`       | Run the headless SDK functional tests           |
 
 ## Building
 
@@ -120,29 +129,37 @@ The output binaries will be placed in `src-tauri/target/release/bundle/`.
 ```
 vetour/
 ├── src/                      # Frontend source (React + TypeScript)
-│   ├── components/           # React components
+│   ├── commands/              # Typed command API, extension boundary, SDK host adapter
+│   ├── components/            # Feature screens and shared UI primitives
 │   │   ├── Editor/           # Main editor (panorama, hotspots, assets)
 │   │   ├── Home/             # Home screen and project list
 │   │   ├── Present/          # Presentation mode (separate window)
 │   │   ├── Settings/         # Settings modal
 │   │   └── ui/               # Shared UI primitives
-│   ├── lib/                  # Utilities and helpers
-│   ├── store/                # Zustand stores
-│   ├── types/                # TypeScript type definitions
-│   ├── contexts/             # React contexts (theme)
-│   └── constants.ts          # Centralized constants
+│   ├── contexts/              # React providers
+│   ├── lib/                   # Persistence, validation, media, and platform helpers
+│   ├── store/                 # Zustand state and mutation orchestration
+│   ├── types/                 # Persisted project and public contracts
+│   └── constants.ts           # Shared defaults and limits
+├── packages/vetour-sdk/      # Extension SDK (published to npmjs + GitHub Packages)
+├── scripts/                  # Dev scripts (sidecar download, SDK publish/test)
 ├── src-tauri/                # Tauri backend (Rust)
 │   ├── src/
 │   │   ├── lib.rs            # App entry point and command registration
 │   │   ├── image_processor.rs # Panorama processing (resize, WebP)
 │   │   ├── media_processor.rs # Audio/video conversion (FFmpeg)
+│   │   ├── ffmpeg_manager.rs  # FFmpeg sidecars (download, local import, assets)
 │   │   └── file_lock.rs      # File locking for project files
 │   ├── Cargo.toml
 │   └── tauri.conf.json       # Tauri configuration
-├── package.json
+├── package.json              # Bun monorepo root (workspaces)
 ├── tsconfig.json
 └── vite.config.ts
 ```
+
+The design rationale and dependency boundaries are documented in
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Extension authors should start
+with [docs/EXTENSIONS.md](docs/EXTENSIONS.md).
 
 ## Contributing
 
@@ -161,5 +178,5 @@ This project is licensed under the MIT License — see [LICENSE](LICENSE) for de
 ---
 
 <p align="center">
-  Created by <a href="https://github.com/fazelllyyy">Zulfazli (fazelstudio)</a>
+  Created by <a href="https://github.com/fazelstudio">Zulfazli (fazelstudio)</a>
 </p>

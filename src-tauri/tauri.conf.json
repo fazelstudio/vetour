@@ -19,6 +19,7 @@
         "minHeight": 640,
         "decorations": false,
         "visible": false,
+        "backgroundColor": "#1a1a2e",
         "center": true
       }
     ],
@@ -33,7 +34,6 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "externalBin": ["binaries/ffmpeg"],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

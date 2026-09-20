@@ -1,6 +1,9 @@
 /*-----------------------------------------------------------------------------------------------
  *  Copyright (c) Zulfazli (fazelstudio). All rights reserved.
  *  Licensed under the MIT License. See LICENSE file in the project root for license information.
+ *
+ *  PanoramaPage.tsx
+ *  Panorama workspace with viewer, scene cards, and property panel.
  *-----------------------------------------------------------------------------------------------*/
 
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
@@ -15,16 +18,14 @@ import { PSVViewer } from './PSVViewer';
 import { PropertyPanel } from './PropertyPanel';
 import { DocumentRenderer } from '../Present/DocumentRenderer';
 import { Play, Trash2, MapPin, X } from 'lucide-react';
+import { AlertTriangle, Copy, RotateCcw, ZoomIn, ZoomOut } from 'lucide-react';
 import type { InfoHotspot } from '@/types/tour';
-import { DEFAULT_PROJECT_NAME, generateProjectId, generateSceneId, generateHotspotId, MODAL_MAX_HEIGHT_RATIO } from '@/constants';
+import { generateSceneId, generateHotspotId, MODAL_MAX_HEIGHT_RATIO } from '@/constants';
+import { command } from '@/commands';
 
 export const PanoramaPage = () => {
   const project = useTourStore((state) => state.project);
   const activeSceneId = useTourStore((state) => state.activeSceneId);
-  const setProject = useTourStore((state) => state.setProject);
-  const addScene = useTourStore((state) => state.addScene);
-  const deleteScene = useTourStore((state) => state.deleteScene);
-  const addInfoHotspot = useTourStore((state) => state.addInfoHotspot);
   const images = useMemo(() => (project?.assets ?? []).filter((a) => a.type === 'image'), [project?.assets]);
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -62,17 +63,9 @@ export const PanoramaPage = () => {
     const asset = images.find((a) => a.id === assetId);
     if (!asset) return;
     if (!project) {
-      setProject({
-        id: generateProjectId(),
-        name: DEFAULT_PROJECT_NAME,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        scenes: [],
-        assets: [],
-      });
-      useTourStore.getState().setSavedPath(null);
+      command('project.new', {});
     }
-    addScene({
+    command('scene.add', {
       id: generateSceneId(),
       assetId: asset.id,
       name: asset.name.replace(/\.[^/.]+$/, ''),
@@ -87,14 +80,11 @@ export const PanoramaPage = () => {
 
   const handleSetDefault = (sceneId: string) => {
     if (!project) return;
-    const reordered = [...project.scenes];
-    const idx = reordered.findIndex((s) => s.id === sceneId);
+    const idx = project.scenes.findIndex((s) => s.id === sceneId);
     if (idx > 0) {
-      const [item] = reordered.splice(idx, 1);
-      reordered.unshift(item);
-      setProject({ ...project, scenes: reordered, defaultSceneId: sceneId });
-      useTourStore.getState().setUnsavedChanges(true);
+      command('scene.reorder', { fromIndex: idx, toIndex: 0 });
     }
+    command('project.set-start-scene', { sceneId });
   };
 
   const handleActionClick = (e: React.MouseEvent, sceneId: string) => {
@@ -109,7 +99,7 @@ export const PanoramaPage = () => {
   };
 
   const handleDeleteConfirm = () => {
-    if (deleteTarget) deleteScene(deleteTarget);
+    if (deleteTarget) command('scene.delete', deleteTarget);
     setDeleteTarget(null);
   };
 
@@ -129,15 +119,18 @@ export const PanoramaPage = () => {
   const handleConfirmHotspot = useCallback(() => {
     if (!hotspotConfirmPos || !activeSceneId) return;
     const newId = generateHotspotId();
-    addInfoHotspot(activeSceneId, {
-      id: newId,
-      position: hotspotConfirmPos.pos,
-      tooltip: 'New Hotspot',
-      data: { action: 'navigate' },
+    command('hotspot.add-info', {
+      sceneId: activeSceneId,
+      hotspot: {
+        id: newId,
+        position: hotspotConfirmPos.pos,
+        tooltip: 'New Hotspot',
+        data: { action: 'navigate' },
+      },
     });
     setHotspotConfirmPos(null);
-    useTourStore.getState().setSelectedHotspot(newId);
-  }, [hotspotConfirmPos, activeSceneId, addInfoHotspot]);
+    command('selection.set-hotspot', newId);
+  }, [hotspotConfirmPos, activeSceneId]);
 
   const sceneName = deleteTarget
     ? project?.scenes.find((s) => s.id === deleteTarget)?.name || 'this scene'
@@ -146,6 +139,10 @@ export const PanoramaPage = () => {
   const activeScene = project?.scenes.find((s) => s.id === activeSceneId);
 
   const scenes = project?.scenes ?? [];
+  const validation = project
+    ? (command('project.validation.validate', project) as { valid: boolean; issues: { message: string }[] })
+    : { valid: true, issues: [] };
+  const [draggedSceneIndex, setDraggedSceneIndex] = useState<number | null>(null);
 
   const sceneRef = useRef<HTMLDivElement>(null);
   const [sceneHeight, setSceneHeight] = useState(0);
@@ -165,9 +162,9 @@ export const PanoramaPage = () => {
   return (
     <div className="flex h-full w-full bg-background overflow-hidden">
 
-      {/* Left: Preview + Cards */}
+      {/* Left: preview and scene cards. */}
       <div className="flex flex-col flex-1 overflow-hidden">
-        {/* Center: Preview Area */}
+        {/* Center: panorama preview area. */}
         <div ref={sceneRef} className="flex-1 relative bg-background overflow-hidden min-h-0">
           {!activeSceneId ? (
             <div className="absolute inset-0 flex items-center justify-center">
@@ -179,6 +176,19 @@ export const PanoramaPage = () => {
           ) : (
             <div id="psv-container" className="w-full h-full relative">
               <PSVViewer onRightClickPlace={handleRightClickPlace} onCancelPlace={() => setHotspotConfirmPos(null)} onHotspotDoubleClick={handleHotspotDoubleClick} />
+            </div>
+          )}
+          {activeSceneId && (
+            <div className="absolute top-4 left-4 z-10 flex items-center gap-1 rounded-2xl border border-border bg-card/90 backdrop-blur px-1.5 py-1.5 shadow-lg">
+              <button aria-label="Zoom out" title="Zoom out" className="rounded-xl p-2 text-text-secondary hover:bg-surface hover:text-text-primary" onClick={() => window.dispatchEvent(new CustomEvent('viewer-zoom', { detail: -10 }))}><ZoomOut className="w-4 h-4" /></button>
+              <button aria-label="Reset view" title="Reset view" className="rounded-xl px-2 py-1 text-[11px] font-medium text-text-secondary hover:bg-surface hover:text-text-primary" onClick={() => window.dispatchEvent(new Event('viewer-reset'))}><RotateCcw className="w-4 h-4" /></button>
+              <button aria-label="Zoom in" title="Zoom in" className="rounded-xl p-2 text-text-secondary hover:bg-surface hover:text-text-primary" onClick={() => window.dispatchEvent(new CustomEvent('viewer-zoom', { detail: 10 }))}><ZoomIn className="w-4 h-4" /></button>
+            </div>
+          )}
+          {!validation.valid && (
+            <div className="absolute bottom-4 left-4 z-10 max-w-md rounded-2xl border border-amber-500/30 bg-card/95 px-4 py-3 shadow-lg">
+              <div className="flex items-center gap-2 text-sm font-medium text-amber-700 dark:text-amber-300"><AlertTriangle className="w-4 h-4" /> Project needs attention</div>
+              <div className="mt-1 text-xs text-text-secondary">{validation.issues.slice(0, 3).map((issue) => issue.message).join(' ')}</div>
             </div>
           )}
 
@@ -283,7 +293,7 @@ export const PanoramaPage = () => {
           )}
         </div>
 
-        {/* Panorama Cards */}
+        {/* Panorama scene cards. */}
         <div className="shrink-0 border-t border-border bg-surface">
           <div className="flex items-center gap-2 px-4 py-2 border-b border-border">
             <h2 className="text-sm font-semibold text-text-primary">Panoramas</h2>
@@ -292,14 +302,14 @@ export const PanoramaPage = () => {
             )}
           </div>
           <div className="flex gap-3 overflow-x-auto px-4 py-3 custom-scroll">
-            {scenes.map((scene) => (
-              <div key={scene.id} className="min-w-[140px] w-[140px] shrink-0">
+            {scenes.map((scene, index) => (
+              <div key={scene.id} className="min-w-[140px] w-[140px] shrink-0" draggable onDragStart={() => setDraggedSceneIndex(index)} onDragOver={(event) => event.preventDefault()} onDrop={() => { if (draggedSceneIndex !== null && draggedSceneIndex !== index) command('scene.reorder', { fromIndex: draggedSceneIndex, toIndex: index }); setDraggedSceneIndex(null); }}>
                 <GridCard
                   title={scene.name ?? ''}
                   image={scene.thumbnail ? getAssetUrl(scene.thumbnail) : (scene.panorama ? getAssetUrl(scene.panorama) : undefined)}
                   badge={project?.defaultSceneId ? (project.defaultSceneId === scene.id ? 'Start' : undefined) : (scenes[0]?.id === scene.id ? 'Start' : undefined)}
                   isActive={activeSceneId === scene.id}
-                  onClick={() => useTourStore.getState().setActiveScene(scene.id)}
+                  onClick={() => command('scene.activate', scene.id)}
                   onActionClick={(e) => handleActionClick(e, scene.id)}
                 />
               </div>
@@ -316,12 +326,12 @@ export const PanoramaPage = () => {
         </div>
       </div>
 
-      {/* Right: Properties Panel (full height) */}
+      {/* Right: full-height properties panel. */}
       <div className="w-80 shrink-0 border-l border-border">
         <PropertyPanel />
       </div>
 
-      {/* Add Panorama Modal */}
+      {/* Add panorama dialog. */}
       <Modal
         open={isAddModalOpen}
         onOpenChange={(open) => { setIsAddModalOpen(open); if (!open) setSelectedAssetId(null); }}
@@ -374,6 +384,7 @@ export const PanoramaPage = () => {
                 ...((project?.defaultSceneId !== contextMenu.sceneId && scenes[0]?.id !== contextMenu.sceneId)
                   ? [{ label: 'Set as Start', icon: <Play className="w-4 h-4" />, onClick: () => handleSetDefault(contextMenu.sceneId!) }]
                   : []),
+                { label: 'Duplicate', icon: <Copy className="w-4 h-4" />, onClick: () => command('scene.duplicate', contextMenu.sceneId!) },
                 { label: 'Delete', icon: <Trash2 className="w-4 h-4" />, onClick: () => handleDeleteRequest(contextMenu.sceneId!), danger: true },
               ]
             : []

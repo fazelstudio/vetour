@@ -1,11 +1,22 @@
 /*-----------------------------------------------------------------------------------------------
  *  Copyright (c) Zulfazli (fazelstudio). All rights reserved.
  *  Licensed under the MIT License. See LICENSE file in the project root for license information.
+ *
+ *  tour.ts
+ *  Core domain types for projects, scenes, hotspots, and assets.
  *-----------------------------------------------------------------------------------------------*/
 
 export type GpsTuple = [number, number, number?];
 
 export type AssetType = 'image' | 'audio' | 'video' | 'document' | 'font';
+export type ProjectCategory = 'real-estate' | 'hospitality' | 'museum' | 'education' | 'showroom' | 'other';
+
+export interface ProjectBranding {
+  logo?: string;
+  favicon?: string;
+  loadingScreen?: string;
+  primaryColor?: string;
+}
 
 export interface AssetEntry {
   id: string;
@@ -45,8 +56,8 @@ export interface TourScene {
   panorama: string;
   assetId?: string;
   name?: string;
-  caption?: string;
   description?: string;
+  notes?: string;
   thumbnail?: string;
   gps?: GpsTuple;
   links: NavigationHotspot[];
@@ -64,6 +75,9 @@ export interface TourProject {
   name: string;
   slug?: string;
   description?: string;
+  category?: ProjectCategory;
+  branding?: ProjectBranding;
+  schemaVersion?: number;
   createdAt: string;
   updatedAt: string;
   scenes: TourScene[];
@@ -73,8 +87,4 @@ export interface TourProject {
   compass?: boolean;
   map?: unknown;
   plan?: unknown;
-  deployInfo?: {
-    slug: string;
-    lastDeployedAt: string;
-  };
 }

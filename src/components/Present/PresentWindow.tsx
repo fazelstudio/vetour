@@ -1,10 +1,14 @@
 /*-----------------------------------------------------------------------------------------------
  *  Copyright (c) Zulfazli (fazelstudio). All rights reserved.
  *  Licensed under the MIT License. See LICENSE file in the project root for license information.
+ *
+ *  PresentWindow.tsx
+ *  Full-screen tour presenter with scene navigation and media overlays.
  *-----------------------------------------------------------------------------------------------*/
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useTourStore } from '@/store/useTourStore';
+import { command } from '@/commands';
 import { PSVViewer } from '../Editor/PSVViewer';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { invoke } from '@tauri-apps/api/core';
@@ -26,10 +30,6 @@ interface PresentModalState {
 }
 
 export const PresentWindow = () => {
-  const setProject = useTourStore((state) => state.setProject);
-  const updateProject = useTourStore((state) => state.updateProject);
-  const setPresentMode = useTourStore((state) => state.setPresentMode);
-  const setActiveScene = useTourStore((state) => state.setActiveScene);
   const activeSceneId = useTourStore((state) => state.activeSceneId);
   const project = useTourStore((state) => state.project);
 
@@ -39,6 +39,7 @@ export const PresentWindow = () => {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [showIntro, setShowIntro] = useState(true);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const modalStateRef = useRef(modalState);
   const audioInfoRef = useRef(audioInfo);
@@ -68,9 +69,9 @@ export const PresentWindow = () => {
               }
             }
 
-            setProject(data);
+            command('project.set', data);
             const startSceneId = data.defaultSceneId || (data.scenes?.length > 0 ? data.scenes[0].id : null);
-            if (startSceneId) setActiveScene(startSceneId);
+            if (startSceneId) command('scene.activate', startSceneId);
           }
           await invoke('clear_present_data');
         }
@@ -81,14 +82,14 @@ export const PresentWindow = () => {
     };
 
     loadData();
-    setPresentMode(true);
+    command('present.enter', undefined);
 
     let unlisten: (() => void) | undefined;
     listen<string>('sync-present-data', (e) => {
       try {
         const data = JSON.parse(e.payload);
-        updateProject(data);
-        // Don't auto-change scene on sync, keep user where they are
+        command('project.update', data);
+        // Keep the current scene instead of following the editor selection.
       } catch (err) {
         console.error('[PresentWindow] Failed to sync data:', err);
       }
@@ -97,6 +98,18 @@ export const PresentWindow = () => {
     });
 
     const handleKey = async (e: KeyboardEvent) => {
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+        const scenes = useTourStore.getState().project?.scenes ?? [];
+        const index = scenes.findIndex((scene) => scene.id === useTourStore.getState().activeSceneId);
+        if (index >= 0 && scenes[index + 1]) command('scene.activate', scenes[index + 1].id);
+        return;
+      }
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+        const scenes = useTourStore.getState().project?.scenes ?? [];
+        const index = scenes.findIndex((scene) => scene.id === useTourStore.getState().activeSceneId);
+        if (index > 0) command('scene.activate', scenes[index - 1].id);
+        return;
+      }
       if (e.key !== 'Escape') return;
       const ms = modalStateRef.current;
       if (ms.type) {
@@ -128,7 +141,7 @@ export const PresentWindow = () => {
         audioRef.current = null;
       }
     };
-  }, [setProject, updateProject, setPresentMode, setActiveScene]);
+  }, []);
 
   const playAudio = useCallback((src: string, name: string) => {
     if (audioRef.current) {
@@ -182,7 +195,7 @@ export const PresentWindow = () => {
     const scene = project.scenes.find(s => s.id === activeSceneId);
     if (!scene) return;
 
-    // Selalu stop audio dari scene sebelumnya saat pindah scene
+    // Always stop the previous scene audio when switching scenes.
     stopAudio();
 
     const autoPlayMarker = scene.markers.find(m => {
@@ -279,6 +292,15 @@ export const PresentWindow = () => {
   return (
     <div className="w-full h-full flex-1 bg-background overflow-hidden relative">
       <PSVViewer onPresentMarkerClick={handleMarkerClick} />
+      {showIntro && project?.branding?.loadingScreen && (
+        <div className="absolute inset-0 z-40 bg-cover bg-center" style={{ backgroundImage: `url(${getAssetUrl(project.branding.loadingScreen)})` }}>
+          <div className="absolute inset-0 bg-black/45 flex flex-col items-center justify-center gap-5 text-white">
+            {project.branding.logo && <img src={getAssetUrl(project.branding.logo)} alt={project.name} className="max-w-56 max-h-24 object-contain" />}
+            <h1 className="text-3xl font-semibold">{project.name}</h1>
+            <button onClick={() => setShowIntro(false)} className="rounded-full bg-white px-6 py-2 text-sm font-medium text-black">Enter tour</button>
+          </div>
+        </div>
+      )}
 
       {modalState.type === 'image' && modalState.imageSrc && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"

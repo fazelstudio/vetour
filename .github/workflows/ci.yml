@@ -42,9 +42,6 @@ jobs:
       - name: Install dependencies
         run: bun install
 
-      - name: Create ffmpeg sidecar placeholder (CI only)
-        run: sh scripts/create-sidecar-placeholder.sh
-
       - name: TypeScript check
         run: bun run check
 

@@ -52,7 +52,7 @@ an individual is officially representing the community in public spaces.
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
 reported to the project maintainer by opening an issue on the
-[GitHub repository](https://github.com/fazelllyyy/vetour/issues). All reports
+  [GitHub repository](https://github.com/fazelstudio/vetour/issues). All reports
 will be reviewed and investigated promptly and fairly.
 
 ## Enforcement Guidelines

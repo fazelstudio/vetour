@@ -1,12 +1,16 @@
 /*-----------------------------------------------------------------------------------------------
  *  Copyright (c) Zulfazli (fazelstudio). All rights reserved.
  *  Licensed under the MIT License. See LICENSE file in the project root for license information.
+ *
+ *  Toast.tsx
+ *  Toast notification container rendered in a portal.
  *-----------------------------------------------------------------------------------------------*/
 
 import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Info, CheckCircle, AlertTriangle, AlertCircle } from 'lucide-react';
 import { useToastStore, type ToastType } from '@/store/toastStore';
+import { command } from '@/commands';
 
 const DURATION = 5000;
 
@@ -38,13 +42,12 @@ const config: Record<ToastType, { icon: React.ReactNode; bg: string; border: str
 };
 
 function ToastItem({ id, type, message }: { id: string; type: ToastType; message: string }) {
-  const removeToast = useToastStore((s) => s.removeToast);
   const c = config[type];
 
   useEffect(() => {
-    const timer = setTimeout(() => removeToast(id), DURATION);
+    const timer = setTimeout(() => command('ui.dismiss-toast', id), DURATION);
     return () => clearTimeout(timer);
-  }, [id, removeToast]);
+  }, [id]);
 
   return (
     <div
@@ -54,7 +57,7 @@ function ToastItem({ id, type, message }: { id: string; type: ToastType; message
       <span className={`shrink-0 mt-0.5 ${c.text}`}>{c.icon}</span>
       <p className={`flex-1 text-sm ${c.text}`}>{message}</p>
       <button
-        onClick={() => removeToast(id)}
+        onClick={() => command('ui.dismiss-toast', id)}
         className={`shrink-0 mt-0.5 opacity-60 hover:opacity-100 transition-opacity ${c.text}`}
       >
         <X className="w-3.5 h-3.5" />

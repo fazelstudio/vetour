@@ -1,6 +1,9 @@
 <!--
   Copyright (c) Zulfazli (fazelstudio). All rights reserved.
   Licensed under the MIT License. See LICENSE file in the project root for license information.
+
+  index.html
+  Application entry with pre-paint theme bootstrap and root mount.
 -->
 
 <!doctype html>
@@ -8,7 +11,36 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
     <title>Vetour</title>
+    <script>
+      /*
+      Pre-paint theme bootstrap that runs before the first paint.
+      The first visible frame already uses the stored theme color.
+      Keep in sync with ThemeContext.tsx and index.css.
+      */
+      (function () {
+        try {
+          var stored = localStorage.getItem('vetour-theme');
+          var theme = stored === 'light' || stored === 'dark' || stored === 'black' ? stored : 'system';
+          var resolved = theme;
+          if (theme === 'system') {
+            resolved = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+          }
+          var bg = resolved === 'black' ? '#000000' : resolved === 'dark' ? '#1a1a2e' : '#ffffff';
+          document.documentElement.setAttribute('data-theme', resolved);
+          document.documentElement.style.backgroundColor = bg;
+          document.documentElement.style.colorScheme = resolved === 'light' ? 'light' : 'dark';
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (!meta) {
+            meta = document.createElement('meta');
+            meta.setAttribute('name', 'theme-color');
+            document.head.appendChild(meta);
+          }
+          meta.setAttribute('content', bg);
+        } catch (e) {}
+      })();
+    </script>
     <style>
       @font-face { font-family: 'Inter'; font-style: normal; font-weight: 400; font-display: swap; src: local('Segoe UI'), local('SF Pro Text'), local('Helvetica Neue'), local('Arial'); }
       @font-face { font-family: 'Inter'; font-style: normal; font-weight: 500; font-display: swap; src: local('Segoe UI Semibold'), local('SF Pro Text Medium'), local('Helvetica Neue Medium'), local('Arial'); }

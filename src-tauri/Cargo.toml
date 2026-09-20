@@ -1,6 +1,9 @@
 #-----------------------------------------------------------------------------------------------
 #  Copyright (c) Zulfazli (fazelstudio). All rights reserved.
 #  Licensed under the MIT License. See LICENSE file in the project root for license information.
+#
+#  Cargo.toml
+#  Rust package manifest with Tauri dependencies and release profile.
 #-----------------------------------------------------------------------------------------------
 
 [package]
@@ -10,12 +13,12 @@ description = "A cross-platform desktop app for creating and presenting immersiv
 authors = ["Zulfazli (fazelstudio)"]
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html.
 
 [lib]
-# The `_lib` suffix may seem redundant but it is necessary
-# to make the lib name unique and wouldn't conflict with the bin name.
-# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+# The `_lib` suffix looks redundant, but it keeps the lib name unique.
+# It avoids conflicts with the binary name, mainly on Windows.
+# See https://github.com/rust-lang/cargo/issues/8519.
 name = "vetour_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
@@ -24,23 +27,23 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 tauri = { version = "2", features = ["protocol-asset"] }
-tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
 tauri-plugin-dialog = "2"
 tauri-plugin-fs = { version = "2", features = ["watch"] }
-tauri-plugin-keyring = "0.1.0"
-tauri-plugin-shell = "2"
 image = { version = "0.25.1", default-features = false, features = ["jpeg", "png", "webp"] }
 webp = "0.3.1"
 fs2 = "0.4"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream"] }
+futures-util = "0.3"
+tokio = { version = "1", features = ["fs", "io-util", "time", "process", "macros"] }
+tauri-plugin-snap-layout = "1.0.9"
 
 [profile.dev]
-incremental = true # Compiles faster by caching parts of the program
+incremental = true # Compile faster by caching parts of the program.
 
 [profile.release]
-panic = "abort" # Menghapus traceback panic, mengurangi ukuran binary
-codegen-units = 1 # Kompilasi lebih lambat, tapi ukuran binary jauh lebih kecil dan performa lebih baik
-lto = true # Link Time Optimization, sangat signifikan mengecilkan ukuran
-opt-level = "s" # Optimasi untuk size (bisa juga "z")
-strip = true # Menghapus symbol debug dari binary (sangat mengecilkan ukuran)
+panic = "abort" # Remove panic backtraces to reduce binary size.
+codegen-units = 1 # Slower build, but smaller binary and better runtime performance.
+lto = true # Link-time optimization, significantly reduces binary size.
+opt-level = "s" # Optimize for size (alternatively "z").
+strip = true # Strip debug symbols from the binary (greatly reduces size).

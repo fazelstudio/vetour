@@ -1,6 +1,9 @@
 /*-----------------------------------------------------------------------------------------------
  *  Copyright (c) Zulfazli (fazelstudio). All rights reserved.
  *  Licensed under the MIT License. See LICENSE file in the project root for license information.
+ *
+ *  EditorLayout.tsx
+ *  Editor shell with view tabs, autosave, and exit handling.
  *-----------------------------------------------------------------------------------------------*/
 
 import { useState, useEffect } from 'react';
@@ -8,23 +11,19 @@ import { ErrorBoundary } from '../ErrorBoundary';
 import { Tooltip } from '../ui/Tooltip';
 import { Toolbar } from './Toolbar';
 import { PanoramaPage } from './PanoramaPage';
+import { NavigationGraph } from './NavigationGraph';
 import { AssetsView } from './AssetsView';
 import { SkeletonEditor } from './SkeletonEditor';
 import { useTourStore } from '@/store/useTourStore';
 import { useFileWatch } from '@/lib/useFileWatch';
-import { loadDeployModule } from '@/lib/deployLoader';
-import type { ComponentType } from 'react';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/button';
-import { Image, FolderArchive, Menu } from 'lucide-react';
-import { save } from '@tauri-apps/plugin-dialog';
-import { saveVetourFile } from '@/lib/vetourFile';
-import { useProjectListStore } from '@/store/projectListStore';
-import { markSave } from '@/lib/useFileWatch';
-import { unlockProjectFile, lockProjectFile } from '@/lib/fileLock';
-import { DEFAULT_PROJECT_NAME, FILE_FILTER_NAME, FILE_FILTER_EXTENSIONS } from '@/constants';
+import { Image, FolderArchive, Menu, GitBranch, Settings } from 'lucide-react';
+import { SettingsModal } from '../Settings/SettingsModal';
+import { AUTOSAVE_INTERVAL_MS } from '@/constants';
+import { command } from '@/commands';
 
-type EditorView = 'panorama' | 'assets';
+type EditorView = 'panorama' | 'graph' | 'assets';
 
 interface EditorLayoutProps {
   onNavigateHome?: () => void;
@@ -34,27 +33,71 @@ export const EditorLayout = ({ onNavigateHome }: EditorLayoutProps) => {
   const project = useTourStore((state) => state.project);
   const unsavedChanges = useTourStore((state) => state.unsavedChanges);
   const savedPath = useTourStore((state) => state.savedPath);
-  const setUnsavedChanges = useTourStore((state) => state.setUnsavedChanges);
-  const updateProject = useTourStore((state) => state.updateProject);
-  const setSavedPath = useTourStore((state) => state.setSavedPath);
 
-  const [deployModalOpen, setDeployModalOpen] = useState(false);
-  const [DeployModal, setDeployModal] = useState<ComponentType<{isOpen: boolean; onClose: () => void}> | null>(null);
+  useEffect(() => {
+    if (!savedPath) return;
+    const timer = window.setInterval(async () => {
+      const state = useTourStore.getState();
+      if (!state.project || !state.unsavedChanges || state.saveStatus === 'saving') return;
+      command('project.set-save-status', 'saving');
+      try {
+        await command('project.save', undefined);
+      } catch (error) {
+        console.error('Autosave error', error);
+        command('project.set-save-status', 'unsaved');
+      }
+    }, AUTOSAVE_INTERVAL_MS);
+    return () => window.clearInterval(timer);
+  }, [savedPath]);
+
   const [view, setView] = useState<EditorView>('panorama');
   const [exitModal, setExitModal] = useState<{ action: () => void } | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [showSettings, setShowSettings] = useState(false);
   const [fileWarning, setFileWarning] = useState<string | null>(null);
 
   useEffect(() => {
-    loadDeployModule().then((mod) => {
-      if (mod?.DeployModal) {
-        setDeployModal(() => mod.DeployModal);
+    const handler = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey)) return;
+      if (event.key.toLowerCase() === 'z') {
+        event.preventDefault();
+        if (event.shiftKey) command('project.redo', undefined); else command('project.undo', undefined);
+      } else if (event.key.toLowerCase() === 'y') {
+        event.preventDefault();
+        command('project.redo', undefined);
+      } else if (event.key.toLowerCase() === 'c') {
+        command('hotspot.copy', undefined);
+      } else if (event.key.toLowerCase() === 'v') {
+        command('hotspot.paste', undefined);
+      } else if (event.key.toLowerCase() === 'd') {
+        event.preventDefault();
+        command('hotspot.duplicate', undefined);
       }
-    });
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
   }, []);
 
-  useFileWatch(() => {
-    setFileWarning('File was modified externally. Reload to see changes?');
+  useEffect(() => {
+    if (view !== 'panorama') return;
+    const frame = window.requestAnimationFrame(() => {
+      window.dispatchEvent(new Event('resize'));
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [view]);
+
+  useFileWatch((event) => {
+    if (event.kind === 'removed') {
+      command('project.set-saved-path', null);
+      command('project.set-dirty', true);
+      setFileWarning('File was deleted externally. Save to a new location?');
+    } else if (event.kind === 'renamed') {
+      command('project.set-saved-path', event.newPath);
+      command('project.set-dirty', true);
+      setFileWarning('File was renamed externally. Path updated.');
+    } else {
+      setFileWarning('File was modified externally. Reload to see changes?');
+    }
   });
 
   const handleNavigateHome = () => {
@@ -67,53 +110,31 @@ export const EditorLayout = ({ onNavigateHome }: EditorLayoutProps) => {
     });
   };
 
+  const handleDontSaveAndExit = () => {
+    /*
+    Discard unsaved changes and keep the pre-save state.
+    Only the dirty flag is cleared before navigating away.
+    */
+    command('project.set-dirty', false);
+    exitModal?.action();
+    setExitModal(null);
+  };
+
   const handleSaveAndExit = async () => {
-    // Wait for any pending debounced updates (e.g. from PropertyPanel) to flush
+    /*
+    Save through the shared project.save command.
+    Cancel keeps the dialog open.
+    */
+    // Wait for pending debounced edits from PropertyPanel to flush.
     await new Promise(resolve => setTimeout(resolve, 350));
-    
+
     const currentProject = useTourStore.getState().project;
     if (!currentProject) return;
     try {
-      if (savedPath) {
-        const updated = { ...currentProject, updatedAt: new Date().toISOString() };
-        await unlockProjectFile();
-        await saveVetourFile(savedPath, updated);
-        await lockProjectFile(savedPath);
-        markSave();
-        updateProject(updated);
-        setUnsavedChanges(false);
-        const fileName = savedPath.split(/[/\\]/).pop()?.replace(/\.[^.]+$/, '') || currentProject.name;
-        useProjectListStore.getState().addProject({
-          id: updated.id,
-          name: updated.name === DEFAULT_PROJECT_NAME ? fileName : updated.name,
-          folderPath: savedPath,
-          createdAt: updated.createdAt,
-          lastOpenedAt: new Date().toISOString(),
-        });
-      } else {
-        const selected = await save({
-          filters: [{ name: FILE_FILTER_NAME, extensions: [...FILE_FILTER_EXTENSIONS] }],
-          defaultPath: `${currentProject.name}.vetour`,
-        });
-        if (!selected) return;
-        const fileName = selected.split(/[/\\]/).pop()?.replace(/\.[^.]+$/, '') || currentProject.name;
-        const name = currentProject.name === DEFAULT_PROJECT_NAME ? fileName : currentProject.name;
-        const updated = { ...currentProject, name, updatedAt: new Date().toISOString() };
-        await unlockProjectFile();
-        await saveVetourFile(selected, updated);
-        await lockProjectFile(selected);
-        markSave();
-        updateProject(updated);
-        setSavedPath(selected);
-        setUnsavedChanges(false);
-        useProjectListStore.getState().addProject({
-          id: updated.id,
-          name,
-          folderPath: selected,
-          createdAt: updated.createdAt,
-          lastOpenedAt: new Date().toISOString(),
-        });
-      }
+      const hadPath = !!useTourStore.getState().savedPath;
+      await command('project.save', undefined);
+      // A cancelled save-as leaves no path and keeps the dialog open.
+      if (!hadPath && !useTourStore.getState().savedPath) return;
     } catch (e) {
       console.error('Save error', e);
       return;
@@ -124,6 +145,7 @@ export const EditorLayout = ({ onNavigateHome }: EditorLayoutProps) => {
 
   const tabs = [
     { id: 'panorama' as const, label: 'Panorama', icon: <Image className="w-5 h-5" /> },
+    { id: 'graph' as const, label: 'Navigation', icon: <GitBranch className="w-5 h-5" /> },
     { id: 'assets' as const, label: 'Assets', icon: <FolderArchive className="w-5 h-5" /> },
   ];
 
@@ -138,7 +160,7 @@ export const EditorLayout = ({ onNavigateHome }: EditorLayoutProps) => {
         </div>
       )}
       
-      <Toolbar onOpenDeploy={DeployModal ? () => setDeployModalOpen(true) : undefined} onNavigateHome={handleNavigateHome} />
+      <Toolbar onNavigateHome={handleNavigateHome} />
 
       {fileWarning && (
         <div className="flex items-center justify-between px-4 py-2 bg-amber-500/10 border-b border-amber-500/30 text-sm text-amber-600 shrink-0">
@@ -147,7 +169,7 @@ export const EditorLayout = ({ onNavigateHome }: EditorLayoutProps) => {
         </div>
       )}
 
-      <div className="flex flex-1 w-full overflow-hidden">
+      <div className="relative flex flex-1 w-full overflow-hidden">
         <div className={`shrink-0 flex flex-col bg-surface border-r border-border py-3 transition-all duration-300 overflow-hidden gap-1 ${sidebarOpen ? 'w-[200px]' : 'w-[60px]'}`}>
           {tabs.map((tab) => {
             const isActive = view === tab.id;
@@ -169,17 +191,29 @@ export const EditorLayout = ({ onNavigateHome }: EditorLayoutProps) => {
             </span>
             <span className={`font-medium truncate transition-all duration-300 overflow-hidden whitespace-nowrap ${sidebarOpen ? 'max-w-[200px] opacity-100' : 'max-w-0 opacity-0'}`}>Collapse</span>
           </button>
+          <Tooltip content={sidebarOpen ? '' : 'Settings'}>
+            <button onClick={() => setShowSettings(true)}
+              className="flex items-center w-full rounded-xl text-sm transition-all shrink-0 py-2.5 pl-[20px] text-text-secondary hover:bg-surface hover:text-text-primary">
+              <span className={`shrink-0 transition-all duration-300 ${sidebarOpen ? 'mr-3' : ''}`}>
+                <Settings className="w-5 h-5" />
+              </span>
+              <span className={`font-medium truncate transition-all duration-300 overflow-hidden whitespace-nowrap ${sidebarOpen ? 'max-w-[200px] opacity-100' : 'max-w-0 opacity-0'}`}>Settings</span>
+            </button>
+          </Tooltip>
         </div>
 
-        <div className={`flex-1 overflow-hidden ${view === 'panorama' ? 'block' : 'hidden'}`}>
-          <ErrorBoundary><PanoramaPage /></ErrorBoundary>
-        </div>
-        <div className={`flex-1 overflow-auto ${view === 'assets' ? 'block' : 'hidden'}`}>
-          <ErrorBoundary><AssetsView /></ErrorBoundary>
+        <div className="relative flex-1 overflow-hidden">
+          <div className={`absolute inset-0 overflow-hidden transition-opacity duration-150 ${view === 'panorama' ? 'z-10 visible opacity-100 pointer-events-auto' : 'z-0 invisible opacity-0 pointer-events-none'}`}>
+            <ErrorBoundary><PanoramaPage /></ErrorBoundary>
+          </div>
+          <div className={`absolute inset-0 overflow-hidden transition-opacity duration-150 ${view === 'graph' ? 'z-10 visible opacity-100 pointer-events-auto' : 'z-0 invisible opacity-0 pointer-events-none'}`}>
+            <ErrorBoundary><NavigationGraph onOpenScene={() => setView('panorama')} /></ErrorBoundary>
+          </div>
+          <div className={`absolute inset-0 overflow-auto transition-opacity duration-150 ${view === 'assets' ? 'z-10 visible opacity-100 pointer-events-auto' : 'z-0 invisible opacity-0 pointer-events-none'}`}>
+            <ErrorBoundary><AssetsView /></ErrorBoundary>
+          </div>
         </div>
       </div>
-
-      {DeployModal && <DeployModal isOpen={deployModalOpen} onClose={() => setDeployModalOpen(false)} />}
 
       <Modal
         open={!!exitModal}
@@ -190,13 +224,14 @@ export const EditorLayout = ({ onNavigateHome }: EditorLayoutProps) => {
         actions={
           <div className="flex w-full justify-end gap-2">
             <Button variant="outline" onClick={() => setExitModal(null)}>Cancel</Button>
-            <Button variant="ghost" onClick={() => { exitModal?.action(); setExitModal(null); }}>Discard</Button>
+            <Button variant="ghost" onClick={handleDontSaveAndExit}>Discard</Button>
             <Button onClick={handleSaveAndExit}>Save</Button>
           </div>
         }
       >
         <></>
       </Modal>
+      <SettingsModal open={showSettings} onOpenChange={setShowSettings} />
     </div>
   );
 };

@@ -1,6 +1,9 @@
 /*-----------------------------------------------------------------------------------------------
  *  Copyright (c) Zulfazli (fazelstudio). All rights reserved.
  *  Licensed under the MIT License. See LICENSE file in the project root for license information.
+ *
+ *  Select.tsx
+ *  Custom dropdown select with keyboard dismissal.
  *-----------------------------------------------------------------------------------------------*/
 
 import { useState, useRef, useEffect, ReactNode } from 'react';

@@ -1,6 +1,9 @@
 /*-----------------------------------------------------------------------------------------------
  *  Copyright (c) Zulfazli (fazelstudio). All rights reserved.
  *  Licensed under the MIT License. See LICENSE file in the project root for license information.
+ *
+ *  index.css
+ *  Global styles with theme tokens and base layout rules.
  *-----------------------------------------------------------------------------------------------*/
 
 @import "tailwindcss";
@@ -9,7 +12,7 @@
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-serif: "DM Serif Display", serif;
   
-  /* Map CSS variables to Tailwind colors */
+  /* Map CSS variables to Tailwind color tokens. */
 
   --color-primary: var(--color-primary);
   --color-primary-hover: var(--color-primary-hover);
@@ -93,6 +96,20 @@
   color-scheme: dark;
 }
 
+/*
+Opaque html fallback so the webview never shows a transparent frame.
+Hex values must stay in sync with the theme tokens above and index.html.
+*/
+html {
+  background-color: #ffffff;
+}
+html[data-theme="dark"] {
+  background-color: #1a1a2e;
+}
+html[data-theme="black"] {
+  background-color: #000000;
+}
+
 @layer base {
   * {
     margin: 0;
@@ -148,7 +165,7 @@
   animation: slide-up 0.25s ease-out;
 }
 
-/* Custom styles for react-colorful */
+/* Custom styles for the react-colorful picker. */
 .custom-color-picker .react-colorful {
   width: 100%;
   height: 160px;

@@ -1,6 +1,9 @@
 /*-----------------------------------------------------------------------------------------------
  *  Copyright (c) Zulfazli (fazelstudio). All rights reserved.
  *  Licensed under the MIT License. See LICENSE file in the project root for license information.
+ *
+ *  icons.ts
+ *  Lucide icon SVG path map for hotspot markers.
  *-----------------------------------------------------------------------------------------------*/
 
 export const LUCIDE_ICONS: Record<string, string> = {

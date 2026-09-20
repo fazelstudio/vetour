@@ -50,17 +50,8 @@ jobs:
             patchelf \
             libxdo-dev
 
-      - name: Install 7-Zip (macOS)
-        if: runner.os == 'macOS'
-        run: brew install sevenzip
-
       - name: Install JS dependencies
         run: bun install --ignore-scripts
-
-      - name: Download ffmpeg sidecar
-        run: bun run sidecar:download
-        env:
-          SIDECAR_VERSION: ${{ github.ref_name }}
 
       - name: Build Tauri app
         run: bun run tauri build

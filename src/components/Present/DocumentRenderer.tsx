@@ -1,3 +1,11 @@
+/*-----------------------------------------------------------------------------------------------
+ *  Copyright (c) Zulfazli (fazelstudio). All rights reserved.
+ *  Licensed under the MIT License. See LICENSE file in the project root for license information.
+ *
+ *  DocumentRenderer.tsx
+ *  Document preview for PDF, markdown, text, and office formats.
+ *-----------------------------------------------------------------------------------------------*/
+
 import React, { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -5,6 +13,8 @@ import Papa from 'papaparse';
 import * as mammoth from 'mammoth';
 import * as XLSX from 'xlsx';
 import { Loader2 } from 'lucide-react';
+import { getDocumentExtension } from '@/lib/documentRenderers';
+import { command } from '@/commands';
 
 interface DocumentRendererProps {
   src: string;
@@ -16,7 +26,7 @@ export function DocumentRenderer({ src, title }: DocumentRendererProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const extension = src.split('.').pop()?.split('?')[0]?.toLowerCase();
+  const extension = getDocumentExtension(src);
 
   useEffect(() => {
     let isMounted = true;
@@ -27,7 +37,7 @@ export function DocumentRenderer({ src, title }: DocumentRendererProps) {
       
       try {
         if (extension === 'pdf') {
-          // PDF is rendered natively by iframe, hide default toolbar
+          // PDFs render natively in an iframe with the toolbar hidden.
           setContent(
             <div className="w-[800px] max-w-full h-[600px]">
               <iframe
@@ -122,12 +132,25 @@ export function DocumentRenderer({ src, title }: DocumentRendererProps) {
             </div>
           );
         } else {
-          setContent(
-            <div className="p-6 text-red-500 flex flex-col items-center justify-center h-full">
-              <p>Unsupported document format: .{extension}</p>
-              <p className="text-sm mt-2 text-gray-500">Please convert this file to PDF before importing.</p>
-            </div>
-          );
+          // Ask installed extensions before falling back to the unsupported notice.
+          const handler = extension
+            ? (command('media.document.resolve-handler', { extension }) as { handler: string; extensionId?: string } | null)
+            : null;
+          if (handler?.handler === 'extension') {
+            setContent(
+              <div className="p-6 flex flex-col items-center justify-center h-full">
+                <p>Format .{extension} is provided by extension {handler.extensionId}.</p>
+                <p className="text-sm mt-2 text-gray-500">Update the extension to enable in-viewer rendering.</p>
+              </div>
+            );
+          } else {
+            setContent(
+              <div className="p-6 text-red-500 flex flex-col items-center justify-center h-full">
+                <p>Unsupported document format: .{extension}</p>
+                <p className="text-sm mt-2 text-gray-500">Please convert this file to PDF before importing.</p>
+              </div>
+            );
+          }
         }
       } catch (err) {
         console.error('Error rendering document:', err);

@@ -1,6 +1,9 @@
 /*-----------------------------------------------------------------------------------------------
  *  Copyright (c) Zulfazli (fazelstudio). All rights reserved.
  *  Licensed under the MIT License. See LICENSE file in the project root for license information.
+ *
+ *  presentWindow.ts
+ *  Platform helper for opening the separate Present window.
  *-----------------------------------------------------------------------------------------------*/
 
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
@@ -8,11 +11,16 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { TourProject } from '@/types/tour';
 import { blobUrlCache } from './vetourFile';
-import { useTourStore } from '@/store/useTourStore';
-import { useToastStore } from '@/store/toastStore';
 import { DEFAULT_PROJECT_NAME, PRESENT_WINDOW_SIZE_RATIO, PRESENT_WINDOW_MIN_RATIO } from '@/constants';
 
-export async function openPresentWindow(project: TourProject | null) {
+export interface PresentWindowEvents {
+  onCreated?: () => void;
+  onDestroyed?: () => void;
+  onError?: (message: string) => void;
+}
+
+// Open the Present window without touching UI stores; callers sync state via commands.
+export async function openPresentWindow(project: TourProject | null, events?: PresentWindowEvents) {
   const name = project?.name?.trim();
   const title = name ? (name === DEFAULT_PROJECT_NAME ? `Present - ${DEFAULT_PROJECT_NAME}` : `Present - ${name}`) : `Present - ${DEFAULT_PROJECT_NAME}`;
 
@@ -27,7 +35,7 @@ export async function openPresentWindow(project: TourProject | null) {
     assetMap: Object.fromEntries(blobUrlCache.entries())
   };
 
-  // Store project data in Rust global state (accessible from any webview)
+  // Store project data in Rust global state for access from any webview.
   await invoke('store_present_data', { data: JSON.stringify(presentData) });
 
   const w = new WebviewWindow(label, {
@@ -46,21 +54,22 @@ export async function openPresentWindow(project: TourProject | null) {
   w.once('tauri://created', async () => {
     await w.show();
     await w.setFocus();
-    useTourStore.getState().setPresentMode(true);
+    events?.onCreated?.();
   });
 
   w.once('tauri://destroyed', () => {
-    useTourStore.getState().setPresentMode(false);
+    events?.onDestroyed?.();
   });
 
-  listen('present-closed', () => {
-    useTourStore.getState().setPresentMode(false);
+  const unlisten = await listen('present-closed', () => {
+    events?.onDestroyed?.();
     w.close().catch(() => {});
   });
 
   w.once('tauri://error', (e) => {
     console.error('Present window error:', e);
-    useToastStore.getState().addToast({ type: 'danger', message: 'Failed to open present window.' });
-    useTourStore.getState().setPresentMode(false);
+    events?.onError?.('Failed to open present window.');
   });
+
+  return () => unlisten();
 }

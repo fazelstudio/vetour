@@ -1,6 +1,9 @@
 /*-----------------------------------------------------------------------------------------------
  *  Copyright (c) Zulfazli (fazelstudio). All rights reserved.
  *  Licensed under the MIT License. See LICENSE file in the project root for license information.
+ *
+ *  Modal.tsx
+ *  Application modal and confirmation dialog wrappers.
  *-----------------------------------------------------------------------------------------------*/
 
 import React from 'react';
@@ -14,6 +17,7 @@ interface ModalProps {
   description?: string;
   size?: 'sm' | 'md' | 'lg' | 'xl' | 'half' | 'image-fit';
   contentClassName?: string;
+  bodyClassName?: string;
   children?: React.ReactNode;
   actions?: React.ReactNode;
 }
@@ -25,6 +29,7 @@ export const Modal: React.FC<ModalProps> = ({
   description,
   size = 'md',
   contentClassName,
+  bodyClassName,
   children,
   actions
 }) => {
@@ -52,7 +57,7 @@ export const Modal: React.FC<ModalProps> = ({
             </DialogDescription>
           )}
         </DialogHeader>
-        <div className="py-4 flex-1 min-h-0">
+        <div className={`py-4 flex-1 min-h-0 flex flex-col ${bodyClassName ?? ''}`}>
           {children}
         </div>
         {actions && (
@@ -106,7 +111,7 @@ export const ConfirmModal: React.FC<Omit<ModalProps, 'children' | 'actions'> & {
         </div>
       }
     >
-      {/* Empty children since description is in header */}
+      {/* No body content because the description is shown in the header. */}
     </Modal>
   );
 };

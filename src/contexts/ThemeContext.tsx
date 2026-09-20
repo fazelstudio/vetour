@@ -1,50 +1,52 @@
 /*-----------------------------------------------------------------------------------------------
  *  Copyright (c) Zulfazli (fazelstudio). All rights reserved.
  *  Licensed under the MIT License. See LICENSE file in the project root for license information.
+ *
+ *  ThemeContext.tsx
+ *  Theme provider with system sync and pre-paint flash prevention.
  *-----------------------------------------------------------------------------------------------*/
 
 /* eslint-disable react-refresh/only-export-components */
 
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import { STORAGE_KEY_THEME } from '@/constants';
-
-type Theme = 'light' | 'dark' | 'black' | 'system';
+import { createContext, useContext, useEffect, useLayoutEffect, useState, type ReactNode } from 'react';
+import {
+  applyThemeToDom,
+  getResolvedFromDom,
+  getStoredTheme,
+  requestTheme,
+  resolveThemeName,
+  subscribeTheme,
+  type ResolvedTheme,
+  type Theme,
+} from '@/lib/theme';
 
 interface ThemeContextValue {
   theme: Theme;
-  resolvedTheme: 'light' | 'dark' | 'black';
+  resolvedTheme: ResolvedTheme;
   setTheme: (theme: Theme) => void;
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
-const STORAGE_KEY = STORAGE_KEY_THEME;
-
-function getInitialTheme(): Theme {
-  const stored = localStorage.getItem(STORAGE_KEY);
-  if (stored === 'light' || stored === 'dark' || stored === 'black' || stored === 'system') {
-    return stored;
-  }
-  return 'system';
-}
-
-function resolveTheme(theme: Theme): 'light' | 'dark' | 'black' {
-  if (theme === 'system') {
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-  }
-  return theme;
-}
-
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>(getInitialTheme);
-  const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark' | 'black'>(() => resolveTheme(getInitialTheme()));
+  const [theme, setThemeState] = useState<Theme>(getStoredTheme);
+  const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>(() =>
+    getResolvedFromDom(getStoredTheme()),
+  );
 
-  useEffect(() => {
-    const resolved = resolveTheme(theme);
+  // Apply updates before paint to avoid a visible flash.
+  useLayoutEffect(() => {
+    const resolved = resolveThemeName(theme);
     setResolvedTheme(resolved);
-    document.documentElement.setAttribute('data-theme', resolved);
-    localStorage.setItem(STORAGE_KEY, theme);
+    applyThemeToDom(resolved);
   }, [theme]);
+
+  // Follow external requests such as the ui.theme.set command.
+  useEffect(() => {
+    return subscribeTheme((next) => {
+      setThemeState((current) => (current === next ? current : next));
+    });
+  }, []);
 
   useEffect(() => {
     if (theme !== 'system') return;
@@ -53,7 +55,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     const handler = () => {
       const resolved = mediaQuery.matches ? 'dark' : 'light';
       setResolvedTheme(resolved);
-      document.documentElement.setAttribute('data-theme', resolved);
+      applyThemeToDom(resolved);
     };
     mediaQuery.addEventListener('change', handler);
     return () => mediaQuery.removeEventListener('change', handler);
@@ -61,6 +63,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   const setTheme = (t: Theme) => {
     setThemeState(t);
+    requestTheme(t);
   };
 
   return (

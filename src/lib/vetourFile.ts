@@ -1,6 +1,9 @@
 /*-----------------------------------------------------------------------------------------------
  *  Copyright (c) Zulfazli (fazelstudio). All rights reserved.
  *  Licensed under the MIT License. See LICENSE file in the project root for license information.
+ *
+ *  vetourFile.ts
+ *  Reader and writer for the compressed .vetour project file format.
  *-----------------------------------------------------------------------------------------------*/
 
 import { writeFile, readFile, mkdir } from '@tauri-apps/plugin-fs';
@@ -8,6 +11,7 @@ import { join, tempDir } from '@tauri-apps/api/path';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { gzip, ungzip } from 'pako';
 import type { TourProject } from '../types/tour';
+import { normalizeProject, validateProject } from './projectValidation';
 
 const V1_MAGIC = new Uint8Array([0x56, 0x54, 0x00, 0x01]);
 const V2_MAGIC = new Uint8Array([0x56, 0x54, 0x00, 0x02]);
@@ -73,17 +77,23 @@ function decompressJson(data: Uint8Array): TourProject {
     throw new Error('Project data is corrupted (text decoding failed).');
   }
   try {
-    return JSON.parse(s) as TourProject;
+    const project = JSON.parse(s) as TourProject;
+    const validation = validateProject(project);
+    if (validation.issues.some((issue) => issue.code === 'invalid-project' || issue.code === 'duplicate-id')) {
+      throw new Error('Project data is invalid or corrupted.');
+    }
+    return normalizeProject(project);
   } catch {
     throw new Error('Project data is corrupted (JSON parse failed).');
   }
 }
 
-// ── blob URL cache ──────────────────────────────────────────────────
-// Maps original path → blob URL; tracks all objects created from .vetour
-// so they can be revoked on project close / next load.
+/*
+Blob URL cache for assets extracted from .vetour files.
+Maps original paths to blob URLs so they can be revoked on close or reload.
+*/
 export const blobUrlCache = new Map<string, string>();
-export const blobDataCache = new Map<string, Uint8Array>(); // blob URL → raw bytes (for save)
+export const blobDataCache = new Map<string, Uint8Array>(); // Blob URL to raw bytes for saving.
 
 export function revokeVetourBlobs(): void {
   for (const url of blobUrlCache.values()) {
@@ -102,7 +112,7 @@ async function _saveVetourFile(
   project: TourProject,
   diskRead: (p: string) => Promise<Uint8Array>,
 ): Promise<void> {
-  // Collect paths that are STILL filesystem references (not blob: URLs)
+  // Collect paths that still reference the filesystem instead of blob URLs.
   const assetPaths = collectPaths(project);
 
   const files: { p: string; bin: Uint8Array }[] = [];
@@ -120,7 +130,7 @@ async function _saveVetourFile(
       const bin = await diskRead(p);
       files.push({ p, bin });
     } catch {
-      // skip unreadable files
+      // Skip files that cannot be read.
     }
   }
 
@@ -147,14 +157,14 @@ export async function loadVetourFile(filePath: string): Promise<TourProject> {
 
   const magic = raw.slice(0, 4);
 
-  // ── Legacy v1 format ──
+  // Legacy v1 format with gzip JSON only.
   if (arraysEq(magic, V1_MAGIC)) {
     return decompressJson(raw.slice(4));
   }
 
-  // ── v2 format with embedded assets ──
+  // V2 format with embedded binary assets.
   if (arraysEq(magic, V2_MAGIC)) {
-    // Revoke any blobs from a previous load
+    // Revoke blobs from the previous load before replacing them.
     revokeVetourBlobs();
 
     let off = 4;

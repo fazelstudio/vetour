@@ -1,3 +1,11 @@
+/*-----------------------------------------------------------------------------------------------
+ *  Copyright (c) Zulfazli (fazelstudio). All rights reserved.
+ *  Licensed under the MIT License. See LICENSE file in the project root for license information.
+ *
+ *  panorama.ts
+ *  Asset URL resolution with local file and blob URL caching.
+ *-----------------------------------------------------------------------------------------------*/
+
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { readFile } from '@tauri-apps/plugin-fs';
 import { getMime } from '@/constants';
@@ -13,9 +21,19 @@ export function getAssetUrl(path: string): string {
 
 const panoramaBlobCache = new Map<string, string>();
 
-export function revokePanoramaBlobs() {
+/*
+Clear cached panorama blob URLs, e.g. when a new project file is opened.
+Revokes object URLs to free memory and prevents stale URLs from surviving a reload.
+*/
+export function clearPanoramaCache(): void {
   for (const url of panoramaBlobCache.values()) {
-    if (url.startsWith('blob:')) URL.revokeObjectURL(url);
+    if (url.startsWith('blob:')) {
+      try {
+        URL.revokeObjectURL(url);
+      } catch {
+        // Ignore revoke failures for already-released URLs.
+      }
+    }
   }
   panoramaBlobCache.clear();
 }
@@ -48,8 +66,10 @@ export async function resolvePanoramaUrl(path: string): Promise<string> {
     return url;
   } catch (err) {
     console.warn('[PSV] File read failed, falling back to asset URL:', err);
-    const fallbackUrl = getAssetUrl(path);
-    panoramaBlobCache.set(path, fallbackUrl);
-    return fallbackUrl;
+    /*
+    Do not cache the fallback so a transient read failure can succeed on retry.
+    Caching a fallback would pin the failure permanently until restart.
+    */
+    return getAssetUrl(path);
   }
 }

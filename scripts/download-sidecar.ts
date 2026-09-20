@@ -3,6 +3,7 @@
  *  Copyright (c) Zulfazli (fazelstudio). All rights reserved.
  *  Licensed under the MIT License. See LICENSE file in the project root for license information.
  *
+ *  download-sidecar.ts
  *  Downloads the ffmpeg sidecar binary for the current platform.
  *  Tries in order:
  *    1. Check if already exists
@@ -16,12 +17,20 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const REPO = 'fazelllyyy/vetour';
+const REPO = 'fazelstudio/vetour';
 const VERSION = process.env.SIDECAR_VERSION || 'ffmpeg-sidecar-v1';
 const SIDECAR_DIR = join(__dirname, '..', 'src-tauri', 'binaries');
 
-const platformMap = [
+const platformMap: Array<{
+  key: string;
+  binary: string;
+  canonicalUrl?: string;
+  extractCmd?: string;
+  extractArgs?: string[];
+}> = [
   { key: 'win32-x64',   binary: 'ffmpeg-x86_64-pc-windows-msvc.exe', canonicalUrl: 'https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.7z', extractCmd: '7z', extractArgs: ['e', '-aoa', '-obb'] },
+  // Windows ARM64 has no stable canonical archive source, so the release asset is the only remote origin.
+  { key: 'win32-arm64', binary: 'ffmpeg-aarch64-pc-windows-msvc.exe' },
   { key: 'darwin-x64',  binary: 'ffmpeg-x86_64-apple-darwin',        canonicalUrl: 'https://evermeet.cx/ffmpeg/ffmpeg-7.1.7z',                       extractCmd: '7z', extractArgs: ['e', '-aoa', '-obb'] },
   { key: 'darwin-arm64',binary: 'ffmpeg-aarch64-apple-darwin',       canonicalUrl: 'https://evermeet.cx/ffmpeg/ffmpeg-7.1.7z',                       extractCmd: '7z', extractArgs: ['e', '-aoa', '-obb'] },
   { key: 'linux-x64',   binary: 'ffmpeg-x86_64-unknown-linux-gnu',  canonicalUrl: 'https://johnvansickle.com/ffmpeg/release/ffmpeg-release-amd64-static.tar.xz', extractCmd: 'tar', extractArgs: ['xf', '-', '--strip-components=1', '*/ffmpeg', '-C'] },
@@ -50,6 +59,10 @@ async function extract(archive: string, extractDir: string, entry: { extractCmd:
 }
 
 async function downloadFromCanonical(entry: typeof platformMap[0], targetPath: string): Promise<boolean> {
+  // Platforms without a canonical archive source skip straight to the system check.
+  if (!entry.canonicalUrl || !entry.extractCmd || !entry.extractArgs) return false;
+  const extractCmd = entry.extractCmd;
+  const extractArgs = entry.extractArgs;
   console.log(`[sidecar] Trying canonical source...`);
   try {
     const tmpDir = join(SIDECAR_DIR, '.tmp');
@@ -57,7 +70,7 @@ async function downloadFromCanonical(entry: typeof platformMap[0], targetPath: s
 
     const archivePath = join(tmpDir, 'archive');
     await download(entry.canonicalUrl, archivePath);
-    await extract(archivePath, tmpDir, entry);
+    await extract(archivePath, tmpDir, { extractCmd, extractArgs });
 
     const extracted = join(tmpDir, 'ffmpeg');
     const fs = await import('fs/promises');
@@ -93,7 +106,7 @@ async function main() {
     process.exit(0);
   }
 
-  // Try GitHub Release
+  // Try the GitHub release asset first.
   const releaseUrl = `https://github.com/${REPO}/releases/download/${VERSION}/${entry.binary}`;
   console.log(`[sidecar] Downloading ${entry.binary}...`);
   try {
@@ -111,15 +124,17 @@ async function main() {
     try {
       const fs = await import('fs/promises');
       await fs.rm(targetPath, { force: true });
-    } catch { /* ignore */ }
+    } catch {
+      // Ignore cleanup errors for the partial download.
+    }
   }
 
-  // Fallback to canonical source
+  // Fall back to the canonical FFmpeg source.
   if (await downloadFromCanonical(entry, targetPath)) {
     process.exit(0);
   }
 
-  // Last resort: system ffmpeg
+  // Last resort is the system FFmpeg binary.
   console.log(`[sidecar] Checking for system ffmpeg...`);
   const { spawnSync } = await import('child_process');
   const result = spawnSync('ffmpeg', ['-version'], { stdio: 'pipe' });

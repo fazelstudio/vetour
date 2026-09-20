@@ -1,14 +1,16 @@
 /*-----------------------------------------------------------------------------------------------
  *  Copyright (c) Zulfazli (fazelstudio). All rights reserved.
  *  Licensed under the MIT License. See LICENSE file in the project root for license information.
+ *
+ *  App.tsx
+ *  Root application shell with window lifecycle, routing, and save handling.
  *-----------------------------------------------------------------------------------------------*/
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import { invoke } from '@tauri-apps/api/core';
 import { emit } from '@tauri-apps/api/event';
 import { ThemeProvider } from './contexts/ThemeContext';
-import { save } from '@tauri-apps/plugin-dialog';
-import { saveVetourFile } from '@/lib/vetourFile';
 import { Titlebar } from './components/Titlebar';
 import { EditorLayout } from './components/Editor/EditorLayout';
 import { HomePage } from './components/Home/HomePage';
@@ -17,20 +19,17 @@ import { ToastContainer } from './components/ui/Toast';
 import { Modal } from './components/ui/Modal';
 import { Button } from './components/ui/button';
 import { useTourStore } from './store/useTourStore';
-import { useProjectListStore } from './store/projectListStore';
-import { useToastStore } from './store/toastStore';
-import { markSave } from '@/lib/useFileWatch';
-import { lockProjectFile, unlockProjectFile } from './lib/fileLock';
-import { DEFAULT_PROJECT_NAME, FILE_FILTER_NAME, FILE_FILTER_EXTENSIONS } from './constants';
+import { unlockProjectFile } from './lib/fileLock';
+import { registerCoreCommands, command } from './commands';
 
 const appWindow = getCurrentWindow();
 
 function App() {
+  registerCoreCommands();
   const [page, setPage] = useState<'home' | 'editor'>('home');
   const [isPresent, setIsPresent] = useState(false);
   const [showExitModal, setShowExitModal] = useState(false);
   const [showPresentActiveModal, setShowPresentActiveModal] = useState(false);
-  const [dataReady, setDataReady] = useState(false);
   const isPresentModeActive = useTourStore((state) => state.isPresentMode);
   const closeAfterSave = useRef(false);
 
@@ -42,17 +41,17 @@ function App() {
     isPresentRef.current = isPresent;
   }, [page, isPresent]);
 
-  // Suppress browser default context menu everywhere
+  // Suppress the browser default context menu everywhere.
   useEffect(() => {
     const handler = (e: MouseEvent) => e.preventDefault();
     document.addEventListener('contextmenu', handler);
     return () => document.removeEventListener('contextmenu', handler);
   }, []);
 
-  // Sync project changes to Present Window live
+  // Sync project changes to the Present window live.
   useEffect(() => {
     const unsub = useTourStore.subscribe((state, prevState) => {
-      // Only emit from Editor window to Present window
+      // Only emit from the Editor window to the Present window.
       if (state.isPresentMode) return;
       if (state.project && state.project !== prevState.project) {
         emit('sync-present-data', JSON.stringify(state.project));
@@ -61,33 +60,57 @@ function App() {
     return unsub;
   }, []);
 
-  // Detect present mode from URL parameter
+  // Detect present mode from the URL parameter.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('mode') === 'present') {
       setIsPresent(true);
-      return;
     }
+  }, []);
 
-    // Main window initialization
-    if (dataReady) {
-      const init = async () => {
-        const isVisible = await appWindow.isVisible();
-        if (isVisible) return;
-        await appWindow.maximize();
-        await appWindow.show();
-      };
-      init();
-    }
-  }, [dataReady]);
+  /*
+  Reveal the main window once the first themed frame is painted.
+  The Rust command maximizes the window while it is still hidden,
+  then shows and focuses it — the OS never presents a windowed frame,
+  so there is no startup flicker.
+  */
+  useEffect(() => {
+    let cancelled = false;
+    const reveal = async () => {
+      try {
+        if (await appWindow.isVisible()) return;
+        /*
+        Wait two frames so the themed background is painted before the
+        Rust command reveals the window. The timeout is a safety net
+        for slow machines where rAF may not fire while the window is hidden.
+        */
+        await Promise.race([
+          new Promise<void>((resolve) =>
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+          ),
+          new Promise<void>((resolve) => setTimeout(resolve, 300)),
+        ]);
+        if (cancelled) return;
+        if (await appWindow.isVisible()) return;
+        // Delegate to Rust: maximize → show → focus, all while hidden.
+        await invoke('show_main_window');
+      } catch {
+        // Skip when the window API is unavailable in browser dev mode.
+      }
+    };
+    reveal();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-  // Intercept window close (Alt+F4 / OS close button)
+  // Intercept window close requests such as Alt+F4 or the OS close button.
   useEffect(() => {
     const unlistenPromise = appWindow.onCloseRequested(async (event) => {
-      event.preventDefault(); // Always prevent default, we will destroy manually
+      event.preventDefault(); // Always prevent default because cleanup runs manually.
 
       if (isPresentRef.current) {
-        // Let Present window close normally, but notify main window
+        // Let the Present window close normally while notifying the main window.
         await emit('present-closed');
         appWindow.destroy();
         return;
@@ -113,60 +136,20 @@ function App() {
   }, []);
 
   const performSaveAndContinue = async () => {
-    // Wait for any pending debounced updates (e.g. from PropertyPanel) to flush
+    // Wait for pending debounced edits from PropertyPanel to flush.
     await new Promise(resolve => setTimeout(resolve, 350));
-    
+
     const state = useTourStore.getState();
-    const project = state.project;
-    if (!project) return true;
+    if (!state.project) return true;
 
     try {
-      if (state.savedPath) {
-        const updated = { ...project, updatedAt: new Date().toISOString() };
-        markSave();
-        await unlockProjectFile();
-        await saveVetourFile(state.savedPath, updated);
-        await lockProjectFile(state.savedPath);
-        useTourStore.getState().updateProject(updated);
-        useTourStore.getState().setUnsavedChanges(false);
-        const addProject = useProjectListStore.getState().addProject;
-        const fileName = state.savedPath.split(/[/\\]/).pop()?.replace(/\.[^.]+$/, '') || project.name;
-        addProject({
-          id: project.id,
-          name: project.name === DEFAULT_PROJECT_NAME ? fileName : project.name,
-          folderPath: state.savedPath,
-          createdAt: project.createdAt,
-          lastOpenedAt: new Date().toISOString(),
-        });
-      } else {
-        const selected = await save({
-          filters: [{ name: FILE_FILTER_NAME, extensions: [...FILE_FILTER_EXTENSIONS] }],
-          defaultPath: `${project.name}.vetour`,
-        });
-        if (!selected) return false;
-        const fileName = selected.split(/[/\\]/).pop()?.replace(/\.[^.]+$/, '') || project.name;
-        const name = project.name === DEFAULT_PROJECT_NAME ? fileName : project.name;
-        const updated = { ...project, name, updatedAt: new Date().toISOString() };
-        markSave();
-        await unlockProjectFile();
-        await saveVetourFile(selected, updated);
-        await lockProjectFile(selected);
-        useTourStore.getState().updateProject(updated);
-        useTourStore.getState().setSavedPath(selected);
-        useTourStore.getState().setUnsavedChanges(false);
-        const addProject = useProjectListStore.getState().addProject;
-        addProject({
-          id: updated.id,
-          name,
-          folderPath: selected,
-          createdAt: updated.createdAt,
-          lastOpenedAt: new Date().toISOString(),
-        });
-      }
+      const hadPath = !!state.savedPath;
+      await command('project.save', undefined);
+      // A cancelled save-as dialog returns without a path.
+      if (!hadPath && !useTourStore.getState().savedPath) return false;
       return true;
     } catch (e) {
       console.error('Save error', e);
-      useToastStore.getState().addToast({ type: 'danger', message: 'Failed to save project.' });
       return false;
     }
   };
@@ -179,12 +162,15 @@ function App() {
     setShowExitModal(false);
   };
 
-  const handleDiscardExit = () => {
+  const handleDontSaveExit = () => {
     setShowExitModal(false);
     if (closeAfterSave.current) {
-      // Clear unsaved changes so the interceptor doesn't prevent closing again
-      useTourStore.getState().setUnsavedChanges(false);
-      // Wait a bit to let the modal close animation finish
+      /*
+      Discard in-memory changes without persisting.
+      Clear the dirty flag so the close prompt does not appear again.
+      */
+      command('project.set-dirty', false);
+      // Wait briefly for the modal close animation to finish.
       setTimeout(async () => {
         await unlockProjectFile();
         appWindow.destroy();
@@ -197,7 +183,7 @@ function App() {
     if (!ok) return;
     setShowExitModal(false);
     if (closeAfterSave.current) {
-      // Unsaved changes is already cleared inside performSaveAndContinue
+      // The dirty flag was already cleared by performSaveAndContinue.
       setTimeout(() => {
         appWindow.destroy();
       }, 150);
@@ -221,7 +207,7 @@ function App() {
   if (isPresent) {
     return (
       <ThemeProvider>
-        <div className="h-screen flex flex-col bg-background overflow-hidden">
+        <div className="h-screen w-screen flex flex-col bg-background overflow-hidden">
           <Titlebar page="present" onCloseRequest={async () => {
             await emit('present-closed');
             appWindow.destroy();
@@ -236,14 +222,11 @@ function App() {
 
   return (
     <ThemeProvider>
-      <div className="h-screen flex flex-col">
+      <div className="h-screen w-screen flex flex-col bg-background overflow-hidden">
         <Titlebar page={page} onCloseRequest={handleCloseRequest} />
         <div className="flex-1 min-h-0 relative">
           {page === 'home' ? (
-            <HomePage 
-              onNavigateToEditor={handleNavigateToEditor} 
-              onReady={() => setDataReady(true)} 
-            />
+            <HomePage onNavigateToEditor={handleNavigateToEditor} />
           ) : (
             <EditorLayout onNavigateHome={handleNavigateHome} />
           )}
@@ -266,7 +249,7 @@ function App() {
         actions={
           <div className="flex w-full justify-end gap-2">
             <Button variant="outline" onClick={handleCancelExit}>Cancel</Button>
-            <Button variant="ghost" onClick={handleDiscardExit}>Discard</Button>
+            <Button variant="ghost" onClick={handleDontSaveExit}>Discard</Button>
             <Button onClick={handleSaveExit}>Save</Button>
           </div>
         }

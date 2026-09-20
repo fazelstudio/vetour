@@ -1,6 +1,9 @@
 /*-----------------------------------------------------------------------------------------------
  *  Copyright (c) Zulfazli (fazelstudio). All rights reserved.
  *  Licensed under the MIT License. See LICENSE file in the project root for license information.
+ *
+ *  ColorPickerMenu.tsx
+ *  Solid and gradient color picker with presets and eyedropper.
  *-----------------------------------------------------------------------------------------------*/
 
 import { useState, useRef, useEffect } from 'react';
@@ -46,7 +49,7 @@ export function ColorPickerMenu({
     };
   }, [open]);
 
-  // Convert rgba/other to hex if necessary
+  // Convert RGBA or other formats to HEX when possible.
   const parseHex = (color: string) => {
     if (color.startsWith('#')) return color.substring(0, 7);
     return '#000000';
@@ -60,7 +63,7 @@ export function ColorPickerMenu({
         const result = await eyeDropper.open();
         onChange('solid', result.sRGBHex, bgGradient);
       } catch {
-        // user canceled
+        // Ignore cancelled eyedropper selection.
       }
     } else {
       alert("Eyedropper is not supported in this browser.");

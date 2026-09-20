@@ -1,6 +1,9 @@
 /*-----------------------------------------------------------------------------------------------
  *  Copyright (c) Zulfazli (fazelstudio). All rights reserved.
  *  Licensed under the MIT License. See LICENSE file in the project root for license information.
+ *
+ *  eslint.config.js
+ *  ESLint flat configuration for TypeScript, React hooks, and refresh.
  *-----------------------------------------------------------------------------------------------*/
 
 import js from '@eslint/js';

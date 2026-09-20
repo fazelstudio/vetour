@@ -1,6 +1,9 @@
 /*-----------------------------------------------------------------------------------------------
  *  Copyright (c) Zulfazli (fazelstudio). All rights reserved.
  *  Licensed under the MIT License. See LICENSE file in the project root for license information.
+ *
+ *  AssetsView.tsx
+ *  Asset library with upload, conversion, preview, and management.
  *-----------------------------------------------------------------------------------------------*/
 
 import { useState, useCallback, useMemo, useEffect } from 'react';
@@ -10,14 +13,13 @@ import { GridCard } from '../ui/GridCard';
 import { Button } from '../ui/button';
 import { Modal, ConfirmModal } from '../ui/Modal';
 import { ContextMenu } from '../ui/ContextMenu';
-import { Upload, Image, Music, Video, FileText, Eye, Pencil, Trash2, Type } from 'lucide-react';
+import { Upload, Image, Music, Video, FileText, Eye, Pencil, Trash2, Type, Search, Replace, HardDriveDownload } from 'lucide-react';
 import { open } from '@tauri-apps/plugin-dialog';
-import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { stat } from '@tauri-apps/plugin-fs';
-import { appDataDir } from '@tauri-apps/api/path';
 import { getAssetUrl } from '@/lib/panorama';
-import { useToastStore } from '@/store/toastStore';
+import { convertAsset } from '@/lib/mediaPipeline';
+import { command } from '@/commands';
 import { MAX_UPLOAD_SIZE, MAX_UPLOAD_SIZE_MB, MAX_ASSET_LIMITS, generateAssetId } from '@/constants';
 
 const typeConfig: Record<AssetType, { label: string; icon: React.ReactNode; accept: string }> = {
@@ -68,12 +70,14 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function splitExtension(name: string): { base: string; ext: string } {
+  const idx = name.lastIndexOf('.');
+  if (idx <= 0) return { base: name, ext: '' };
+  return { base: name.slice(0, idx), ext: name.slice(idx) };
+}
+
 export const AssetsView = () => {
   const project = useTourStore((s) => s.project);
-  const addAsset = useTourStore((s) => s.addAsset);
-  const removeAsset = useTourStore((s) => s.removeAsset);
-  const renameAsset = useTourStore((s) => s.renameAsset);
-  const deleteScene = useTourStore((s) => s.deleteScene);
   const assets = useMemo(() => project?.assets ?? [], [project?.assets]);
   const [uploading, setUploading] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<AssetEntry | null>(null);
@@ -81,6 +85,10 @@ export const AssetsView = () => {
   const [viewTarget, setViewTarget] = useState<AssetEntry | null>(null);
   const [renameTarget, setRenameTarget] = useState<AssetEntry | null>(null);
   const [renameValue, setRenameValue] = useState('');
+  const [renameExt, setRenameExt] = useState('');
+  const [search, setSearch] = useState('');
+  const [showUnused, setShowUnused] = useState(false);
+  const [limitErrorModal, setLimitErrorModal] = useState<{ isOpen: boolean; message: string; details?: string[] }>({ isOpen: false, message: '' });
   const [uploadState, setUploadState] = useState<{
     isOpen: boolean;
     currentName: string;
@@ -89,7 +97,6 @@ export const AssetsView = () => {
     status: string;
     progress: number;
   } | null>(null);
-  const [limitErrorModal, setLimitErrorModal] = useState<{ isOpen: boolean; message: string; details?: string[] }>({ isOpen: false, message: '' });
 
   useEffect(() => {
     if (viewTarget) {
@@ -105,9 +112,26 @@ export const AssetsView = () => {
     return project.scenes.filter((s) => s.assetId === deleteTarget.id);
   }, [deleteTarget, project]);
 
+  const processAsset = useCallback(async (
+    path: string,
+    type: AssetType,
+    id: string,
+    fallbackName: string,
+    fallbackSize: number,
+  ): Promise<{ path: string; name: string; size: number }> => {
+    const { result, notice } = await convertAsset(
+      { path, type, id, fallbackName, fallbackSize },
+      (status, progress) => setUploadState((prev) => (prev ? { ...prev, status, progress } : prev)),
+    );
+    if (notice) {
+      command('ui.notify', { type: 'info', message: notice });
+    }
+    return result;
+  }, []);
+
   const handleUpload = async (type: AssetType) => {
     const config = typeConfig[type];
-    const currentCount = assets.filter(a => a.type === type).length;
+    const currentCount = assets.filter((asset) => asset.type === type).length;
     const limit = MAX_ASSET_LIMITS[type] || 5;
 
     if (currentCount >= limit) {
@@ -128,7 +152,7 @@ export const AssetsView = () => {
 
       if (selected && selected.length > 0) {
         const paths = Array.isArray(selected) ? selected : [selected];
-        
+
         if (currentCount + paths.length > limit) {
           setLimitErrorModal({
             isOpen: true,
@@ -143,13 +167,15 @@ export const AssetsView = () => {
         for (let i = 0; i < paths.length; i++) {
           const path = paths[i];
           if (typeof path !== 'string') continue;
-          
+
           const name = path.split(/[/\\]/).pop() || 'file';
           let size = 0;
           try {
             const meta = await stat(path);
             size = meta.size;
-          } catch { /* fallback to 0 */ }
+          } catch {
+            // Keep size as zero when file metadata cannot be read.
+          }
 
           if (size > MAX_UPLOAD_SIZE) {
             skippedFiles.push(name);
@@ -158,21 +184,24 @@ export const AssetsView = () => {
           }
         }
 
+        if (skippedFiles.length > 0) {
+          command('ui.notify', {
+            type: 'warning',
+            message: `${skippedFiles.length} file(s) skipped for exceeding the ${MAX_UPLOAD_SIZE_MB} MB limit.`,
+          });
+        }
+
         if (validPaths.length === 0) {
           setLimitErrorModal({
             isOpen: true,
-            message: paths.length === 1 
+            message: paths.length === 1
               ? `File "${skippedFiles[0]}" exceeds the maximum size limit of ${MAX_UPLOAD_SIZE_MB} MB.`
               : `All selected files exceed the maximum size limit of ${MAX_UPLOAD_SIZE_MB} MB.`,
-            details: paths.length === 1 ? undefined : skippedFiles
+            details: paths.length === 1 ? undefined : skippedFiles,
           });
           return;
         }
 
-        if (skippedFiles.length > 0) {
-          useToastStore.getState().addToast({ type: 'warning', message: `${skippedFiles.length} file(s) skipped for exceeding the ${MAX_UPLOAD_SIZE_MB} MB limit.` });
-        }
-        
         setUploadState({
           isOpen: true,
           currentName: validPaths[0].name,
@@ -201,59 +230,14 @@ export const AssetsView = () => {
             } : prev);
 
             const id = generateAssetId();
-            let finalPath = path;
-            let finalName = name;
-            let finalSize = size;
+            const processed = await processAsset(path, type, id, name, size);
 
-            try {
-              const appDir = await appDataDir();
-              let outputPath: string | null = null;
-
-              if (type === 'image') {
-                const outputDir = appDir.endsWith('/') || appDir.endsWith('\\') ? appDir + 'panoramas' : appDir + '/panoramas';
-                const resolutions = await invoke('process_panorama', {
-                  sceneId: 'asset_' + id,
-                  sourcePath: path,
-                  outputDir,
-                }) as Array<{ label: string; path: string }>;
-                const high = resolutions.find((r) => r.label === 'high') || resolutions[0];
-                if (high) outputPath = high.path;
-              } else if (type === 'audio') {
-                setUploadState(prev => prev ? { ...prev, status: 'Converting Audio...', progress: 50 } : prev);
-                const outputDir = appDir.endsWith('/') || appDir.endsWith('\\') ? appDir + 'media' : appDir + '/media';
-                outputPath = await invoke('convert_audio', { sourcePath: path, outputDir }) as string;
-              } else if (type === 'video') {
-                setUploadState(prev => prev ? { ...prev, status: 'Converting Video...', progress: 50 } : prev);
-                const outputDir = appDir.endsWith('/') || appDir.endsWith('\\') ? appDir + 'media' : appDir + '/media';
-                outputPath = await invoke('convert_video', { sourcePath: path, outputDir }) as string;
-              }
-
-              if (outputPath && outputPath !== path) {
-                const extMap: Record<AssetType, string> = {
-                  image: 'webp',
-                  audio: 'mp3',
-                  video: 'mp4',
-                  document: '',
-                  font: '',
-                };
-                const baseName = name.includes('.') ? name.substring(0, name.lastIndexOf('.')) : name;
-                finalName = `${baseName}.${extMap[type]}`;
-                finalPath = outputPath;
-                try {
-                  const meta = await stat(outputPath);
-                  finalSize = meta.size;
-                } catch { /* fallback to original size */ }
-              }
-            } catch (e) {
-              console.warn(`Conversion failed for ${name}, using original:`, e);
-            }
-
-            addAsset({
+            command('asset.add', {
               id,
-              name: finalName,
-              path: finalPath,
+              name: processed.name,
+              path: processed.path,
               type,
-              size: finalSize,
+              size: processed.size,
               addedAt: new Date().toISOString(),
             });
           }
@@ -277,15 +261,18 @@ export const AssetsView = () => {
   const handleRenameOpen = useCallback((asset: AssetEntry) => {
     setCtxMenu(null);
     setRenameTarget(asset);
-    setRenameValue(asset.name);
+    const { base, ext } = splitExtension(asset.name);
+    setRenameValue(base);
+    setRenameExt(ext);
   }, []);
 
   const handleRenameSave = useCallback(() => {
-    if (renameTarget && renameValue.trim()) {
-      renameAsset(renameTarget.id, renameValue.trim());
+    const base = renameValue.trim();
+    if (renameTarget && base) {
+      command('asset.rename', { assetId: renameTarget.id, name: `${base}${renameExt}` });
     }
     setRenameTarget(null);
-  }, [renameTarget, renameValue, renameAsset]);
+  }, [renameTarget, renameValue, renameExt]);
 
   const handleView = useCallback((asset: AssetEntry) => {
     setCtxMenu(null);
@@ -297,25 +284,78 @@ export const AssetsView = () => {
     setDeleteTarget(asset);
   }, []);
 
+  const handleReplace = useCallback(async (asset: AssetEntry) => {
+    setCtxMenu(null);
+    const selected = await open({
+      multiple: false,
+      filters: [{ name: typeConfig[asset.type].label, extensions: typeConfig[asset.type].accept.split(',').map((value) => value.replace('.', '')) }],
+    });
+    if (!selected || typeof selected !== 'string') return;
+    try {
+      const meta = await stat(selected);
+      setUploadState({
+        isOpen: true,
+        currentName: selected.split(/[/\\]/).pop() || asset.name,
+        currentIndex: 1,
+        total: 1,
+        status: 'Processing replacement...',
+        progress: 0,
+      });
+      const unlisten = await listen('process_progress', (event: { payload: { status: string; progress: number } }) => {
+        setUploadState(prev => prev ? { ...prev, status: event.payload.status, progress: event.payload.progress } : prev);
+      });
+      try {
+        const processed = await processAsset(
+          selected,
+          asset.type,
+          asset.id,
+          selected.split(/[/\\]/).pop() || asset.name,
+          meta.size,
+        );
+        command('asset.replace', { assetId: asset.id, replacement: { path: processed.path, size: processed.size, name: processed.name } });
+      } finally {
+        unlisten();
+        setUploadState(null);
+      }
+    } catch (error) {
+      console.error('Asset replacement error', error);
+      setUploadState(null);
+      command('ui.notify', { type: 'danger', message: 'Failed to replace asset.' });
+    }
+  }, [processAsset]);
+
   const grouped = (['image', 'audio', 'video', 'document', 'font'] as AssetType[]).map((type) => ({
     type,
     ...typeConfig[type],
-    items: assets.filter((a) => a.type === type),
+    items: assets.filter((a) => {
+      const used = project?.scenes.some((scene) => scene.panorama === a.path || scene.thumbnail === a.path || scene.markers.some((marker) => marker.image === a.path || Object.values(marker.data ?? {}).includes(a.path))) ?? false;
+      return a.type === type && a.name.toLowerCase().includes(search.toLowerCase()) && (!showUnused || !used);
+    }),
   }));
 
   return (
     <div className="flex flex-col h-full bg-background p-8 overflow-y-auto custom-scroll">
-      <div className="flex items-center justify-between mb-8">
-        <h1 className="text-3xl font-bold text-text-primary">Assets</h1>
+      <div className="flex items-start justify-between gap-4 mb-8">
+        <div>
+          <h1 className="text-3xl font-bold text-text-primary">Assets</h1>
+          <p className="text-sm text-text-secondary mt-1">Manage the media and files used throughout your virtual tour.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2">
+            <Search className="w-4 h-4 text-text-secondary" />
+            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search assets" className="w-36 bg-transparent text-sm text-text-primary outline-none" />
+          </div>
+          <Button variant={showUnused ? 'secondary' : 'outline'} size="sm" onClick={() => setShowUnused((value) => !value)}><HardDriveDownload className="w-4 h-4 mr-1" /> Unused</Button>
+        </div>
       </div>
 
       {grouped.map((group) => (
         <div key={group.type} className="mb-8">
           <div className="flex items-center justify-between mb-4 border-b border-border pb-2">
             <h2 className="text-lg font-medium text-text-primary flex items-center gap-2">
-              {group.icon} {group.label} <span className="text-sm font-normal text-text-secondary ml-2">({group.items.length} / {MAX_ASSET_LIMITS[group.type] || 0})</span>
+              {group.icon} {group.label}
             </h2>
-            <Button variant="outline" size="sm" onClick={() => handleUpload(group.type)} disabled={uploading || group.items.length >= (MAX_ASSET_LIMITS[group.type] || 0)}>
+            <Button variant="outline" size="sm" onClick={() => handleUpload(group.type)} disabled={uploading || assets.filter((asset) => asset.type === group.type).length >= (MAX_ASSET_LIMITS[group.type] || 0)}>
               <Upload className="w-4 h-4 mr-1" /> Upload
             </Button>
           </div>
@@ -344,6 +384,7 @@ export const AssetsView = () => {
         anchorRect={ctxMenu?.rect}
         actions={ctxMenu ? [
           { label: 'View', onClick: () => handleView(ctxMenu.asset), icon: <Eye className="w-4 h-4" /> },
+          { label: 'Replace', onClick: () => handleReplace(ctxMenu.asset), icon: <Replace className="w-4 h-4" /> },
           { label: 'Rename', onClick: () => handleRenameOpen(ctxMenu.asset), icon: <Pencil className="w-4 h-4" /> },
           { label: 'Delete', onClick: () => handleDeleteRequest(ctxMenu.asset), icon: <Trash2 className="w-4 h-4" />, danger: true },
         ] : []}
@@ -395,18 +436,26 @@ export const AssetsView = () => {
         actions={
           <div className="flex w-full justify-end gap-2">
             <Button variant="outline" onClick={() => setRenameTarget(null)}>Cancel</Button>
-            <Button onClick={handleRenameSave} disabled={!renameValue.trim() || renameValue === renameTarget?.name}>Save</Button>
+            <Button onClick={handleRenameSave} disabled={!renameValue.trim() || `${renameValue.trim()}${renameExt}` === renameTarget?.name}>Save</Button>
           </div>
         }
       >
-        <input
-          type="text"
-          value={renameValue}
-          onChange={(e) => setRenameValue(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') handleRenameSave(); }}
-          className="w-full px-3 py-2 rounded-xl border border-border bg-background text-text-primary outline-none focus:ring-[3px] focus:ring-ring text-sm"
-          autoFocus
-        />
+        <div className="relative">
+          <input
+            type="text"
+            value={renameValue}
+            onChange={(e) => setRenameValue(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleRenameSave(); }}
+            onFocus={(e) => e.target.select()}
+            className="w-full pl-3 pr-16 py-2 rounded-xl border border-border bg-background text-text-primary outline-none focus:ring-[3px] focus:ring-ring text-sm"
+            autoFocus
+          />
+          {renameExt && (
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 max-w-[3.5rem] truncate text-sm text-text-secondary pointer-events-none select-none">
+              {renameExt}
+            </span>
+          )}
+        </div>
       </Modal>
 
       <ConfirmModal
@@ -422,8 +471,8 @@ export const AssetsView = () => {
         isDanger
         onConfirm={() => {
           if (deleteTarget) {
-            linkedScenes.forEach((s) => deleteScene(s.id));
-            removeAsset(deleteTarget.id);
+            linkedScenes.forEach((s) => command('scene.delete', s.id));
+            command('asset.remove', deleteTarget.id);
           }
         }}
         onCancel={() => setDeleteTarget(null)}
@@ -479,8 +528,8 @@ export const AssetsView = () => {
           <p>{limitErrorModal.message}</p>
           {limitErrorModal.details && (
             <ul className="list-disc pl-5 mt-2 max-h-32 overflow-y-auto text-xs text-text-secondary custom-scroll">
-              {limitErrorModal.details.map((n, i) => (
-                <li key={i} className="truncate">{n}</li>
+              {limitErrorModal.details.map((name, index) => (
+                <li key={`${name}-${index}`} className="truncate">{name}</li>
               ))}
             </ul>
           )}

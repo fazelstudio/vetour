@@ -1,50 +1,52 @@
 /*-----------------------------------------------------------------------------------------------
  *  Copyright (c) Zulfazli (fazelstudio). All rights reserved.
  *  Licensed under the MIT License. See LICENSE file in the project root for license information.
+ *
+ *  Toolbar.tsx
+ *  Project toolbar with file actions, history, and present entry.
  *-----------------------------------------------------------------------------------------------*/
 
 import { Button } from '@/components/ui/button';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { useTourStore } from '@/store/useTourStore';
-import { useProjectListStore } from '@/store/projectListStore';
-import { Play, Save, FolderOpen, Plus, Globe, ChevronLeft } from 'lucide-react';
+import { Play, Save, FolderOpen, Plus, ChevronLeft, Undo2, Redo2, Settings2 } from 'lucide-react';
+import { useState } from 'react';
 import { save, open } from '@tauri-apps/plugin-dialog';
-import { saveVetourFile, loadVetourFile } from '@/lib/vetourFile';
+import { loadVetourFile } from '@/lib/vetourFile';
 
-import { openPresentWindow } from '@/lib/presentWindow';
-import { useToastStore } from '@/store/toastStore';
-import { markSave } from '@/lib/useFileWatch';
-import { lockProjectFile, unlockProjectFile } from '@/lib/fileLock';
-import { DEFAULT_PROJECT_NAME, generateProjectId, FILE_FILTER_NAME, FILE_FILTER_EXTENSIONS } from '@/constants';
+import { lockProjectFile } from '@/lib/fileLock';
+import { DEFAULT_PROJECT_NAME, FILE_FILTER_NAME, FILE_FILTER_EXTENSIONS } from '@/constants';
+import { PROJECT_CATEGORY_OPTIONS } from '@/constants';
+import { Modal } from '@/components/ui/Modal';
+import { Input } from '@/components/ui/input';
+import { Select } from '@/components/ui/Select';
+import { command } from '@/commands';
 
 interface ToolbarProps {
-  onOpenDeploy?: () => void;
-  onOpenAuth?: () => void;
   onNavigateHome?: () => void;
 }
 
-export const Toolbar = ({ onOpenDeploy, onNavigateHome }: ToolbarProps) => {
+export const Toolbar = ({ onNavigateHome }: ToolbarProps) => {
   const project = useTourStore((state) => state.project);
-  const updateProject = useTourStore((state) => state.updateProject);
-  const loadProject = useTourStore((state) => state.loadProject);
   const unsavedChanges = useTourStore((state) => state.unsavedChanges);
-  const setUnsavedChanges = useTourStore((state) => state.setUnsavedChanges);
   const savedPath = useTourStore((state) => state.savedPath);
-  const setSavedPath = useTourStore((state) => state.setSavedPath);
+  const canUndo = useTourStore((state) => state.historyPast.length > 0);
+  const canRedo = useTourStore((state) => state.historyFuture.length > 0);
+  const [metadataOpen, setMetadataOpen] = useState(false);
+  const [description, setDescription] = useState('');
+  const [category, setCategory] = useState('other');
+
+  const openMetadata = () => {
+    setDescription(project?.description || '');
+    setCategory(project?.category || 'other');
+    setMetadataOpen(true);
+  };
 
   const handleNew = () => {
     if (useTourStore.getState().unsavedChanges) {
       if (!confirm('You have unsaved changes. Create new project anyway?')) return;
     }
-    loadProject({
-      id: generateProjectId(),
-      name: DEFAULT_PROJECT_NAME,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      scenes: [],
-      assets: [],
-    });
-    setSavedPath(null);
+    command('project.new', {});
   };
 
   const handleOpen = async () => {
@@ -56,51 +58,36 @@ export const Toolbar = ({ onOpenDeploy, onNavigateHome }: ToolbarProps) => {
         const data = await loadVetourFile(selected);
         const fileName = selected.split(/[/\\]/).pop()?.replace(/\.[^.]+$/, '') || data.name;
         const name = data.name === DEFAULT_PROJECT_NAME ? fileName : data.name;
-        const project = { ...data, name };
-        loadProject(project);
-        setSavedPath(selected);
-        useProjectListStore.getState().addProject({
-          id: project.id,
+        const next = { ...data, name };
+        command('project.load', next);
+        command('project.set-saved-path', selected);
+        command('project.recent.add', {
+          id: next.id,
           name,
           folderPath: selected,
-          createdAt: project.createdAt,
+          createdAt: next.createdAt,
           lastOpenedAt: new Date().toISOString(),
         });
         await lockProjectFile(selected);
       }
     } catch (e) {
       console.error('Error opening project', e);
-      useToastStore.getState().addToast({ type: 'danger', message: 'Failed to open project file.' });
+      command('ui.notify', { type: 'danger', message: 'Failed to open project file.' });
     }
   };
 
   const doSave = async (targetPath: string) => {
-    const currentProject = useTourStore.getState().project;
-    if (!currentProject) return;
-    const fileName = targetPath.split(/[/\\]/).pop()?.replace(/\.[^.]+$/, '') || currentProject.name;
-    const name = currentProject.name === DEFAULT_PROJECT_NAME ? fileName : currentProject.name;
-    const updatedProject = { ...currentProject, name, updatedAt: new Date().toISOString() };
-    markSave();
-    await unlockProjectFile();
-    await saveVetourFile(targetPath, updatedProject);
-    await lockProjectFile(targetPath);
-    updateProject(updatedProject);
-    setUnsavedChanges(false);
-    setSavedPath(targetPath);
-    useProjectListStore.getState().addProject({
-      id: updatedProject.id,
-      name,
-      folderPath: targetPath,
-      createdAt: updatedProject.createdAt,
-      lastOpenedAt: new Date().toISOString(),
-    });
-    useToastStore.getState().addToast({ type: 'success', message: 'Project saved successfully!' });
+    void targetPath;
+    await command('project.save', undefined);
+    if (!useTourStore.getState().unsavedChanges) {
+      command('ui.notify', { type: 'success', message: 'Project saved successfully!' });
+    }
   };
 
   const handleSave = async () => {
-    // Wait for any pending debounced updates (e.g. from PropertyPanel) to flush
+    // Wait for pending debounced edits from PropertyPanel to flush.
     await new Promise(resolve => setTimeout(resolve, 350));
-    
+
     const currentProject = useTourStore.getState().project;
     if (!currentProject) return;
     try {
@@ -118,12 +105,12 @@ export const Toolbar = ({ onOpenDeploy, onNavigateHome }: ToolbarProps) => {
     } catch (e) {
       console.error('Error saving project', e);
       if (savedPath && String(e).includes('NotFound')) {
-        setSavedPath(null);
+        command('project.set-saved-path', null);
         if (confirm('File was deleted externally. Save to a new location?')) {
           handleSave();
         }
       } else {
-        useToastStore.getState().addToast({ type: 'danger', message: 'Failed to save project.' });
+        command('ui.notify', { type: 'danger', message: 'Failed to save project.' });
       }
     }
   };
@@ -158,17 +145,29 @@ export const Toolbar = ({ onOpenDeploy, onNavigateHome }: ToolbarProps) => {
       </div>
 
       <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 border-r border-border pr-2 mr-1">
+          <Tooltip content="Undo">
+            <Button variant="ghost" size="sm" onClick={() => command('project.undo', undefined)} disabled={!canUndo}><Undo2 className="w-4 h-4" /></Button>
+          </Tooltip>
+          <Tooltip content="Redo">
+            <Button variant="ghost" size="sm" onClick={() => command('project.redo', undefined)} disabled={!canRedo}><Redo2 className="w-4 h-4" /></Button>
+          </Tooltip>
+        </div>
         <Tooltip content={hasPanorama ? 'Present Tour' : 'Add a panorama image first'}>
-          <Button variant="secondary" size="sm" disabled={!hasPanorama} onClick={() => openPresentWindow(project)}>
+          <Button variant="secondary" size="sm" disabled={!hasPanorama} onClick={() => command('present.open', undefined)}>
             <Play className="w-4 h-4 mr-2" /> Present
           </Button>
         </Tooltip>
-        {onOpenDeploy && (
-          <Button variant="default" size="sm" onClick={onOpenDeploy}>
-            <Globe className="w-4 h-4 mr-2" /> Deploy
-          </Button>
-        )}
+        <Tooltip content="Project settings">
+          <Button variant="ghost" size="sm" onClick={openMetadata}><Settings2 className="w-4 h-4" /></Button>
+        </Tooltip>
       </div>
+      <Modal open={metadataOpen} onOpenChange={setMetadataOpen} title="Project metadata" size="sm" actions={<div className="flex w-full justify-end gap-2"><Button variant="outline" onClick={() => setMetadataOpen(false)}>Cancel</Button><Button onClick={() => { if (project) { command('project.update', { ...project, description, category: category as typeof project.category }); command('project.set-dirty', true); } setMetadataOpen(false); }}>Save</Button></div>}>
+        <div className="space-y-4">
+          <div className="space-y-1"><label className="text-xs font-medium text-text-secondary">Project description</label><Input value={description} onChange={(event) => setDescription(event.target.value)} placeholder="What is this tour about?" /></div>
+          <div className="space-y-1"><label className="text-xs font-medium text-text-secondary">Category</label><Select value={category} onChange={setCategory} options={[...PROJECT_CATEGORY_OPTIONS]} /></div>
+        </div>
+      </Modal>
     </div>
   );
 };

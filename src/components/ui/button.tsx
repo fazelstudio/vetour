@@ -1,6 +1,9 @@
 /*-----------------------------------------------------------------------------------------------
  *  Copyright (c) Zulfazli (fazelstudio). All rights reserved.
  *  Licensed under the MIT License. See LICENSE file in the project root for license information.
+ *
+ *  button.tsx
+ *  Reusable button with variant and size styles.
  *-----------------------------------------------------------------------------------------------*/
 
 import * as React from "react"

@@ -1,6 +1,9 @@
 /*-----------------------------------------------------------------------------------------------
  *  Copyright (c) Zulfazli (fazelstudio). All rights reserved.
  *  Licensed under the MIT License. See LICENSE file in the project root for license information.
+ *
+ *  Titlebar.tsx
+ *  Custom window titlebar with navigation state and window controls.
  *-----------------------------------------------------------------------------------------------*/
 
 import { useState, useEffect } from 'react';
@@ -23,11 +26,23 @@ export const Titlebar = ({ page, onCloseRequest }: TitlebarProps) => {
   const unsavedChanges = useTourStore((state) => state.unsavedChanges);
 
   useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
     appWindow.isMaximized().then(setMaximized);
     const unlisten = appWindow.onResized(() => {
-      appWindow.isMaximized().then(setMaximized);
+      /*
+      Debounce the isMaximized query so it only runs after the OS
+      maximize/restore animation has settled. Querying mid-animation
+      can return a stale value and cause the icon to be wrong.
+      */
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        appWindow.isMaximized().then(setMaximized);
+      }, 50);
     });
-    return () => { unlisten.then(fn => fn()); };
+    return () => {
+      clearTimeout(timer);
+      unlisten.then(fn => fn());
+    };
   }, []);
 
   useEffect(() => {
@@ -77,6 +92,7 @@ export const Titlebar = ({ page, onCloseRequest }: TitlebarProps) => {
             <Minus className="w-3.5 h-3.5" />
           </button>
           <button
+            id="titlebar-maximize"
             onClick={() => appWindow.toggleMaximize()}
             className="w-[46px] h-10 flex items-center justify-center text-text-secondary hover:bg-surface hover:text-text-primary transition-colors"
           >

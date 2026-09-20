@@ -1,18 +1,20 @@
 /*-----------------------------------------------------------------------------------------------
  *  Copyright (c) Zulfazli (fazelstudio). All rights reserved.
  *  Licensed under the MIT License. See LICENSE file in the project root for license information.
+ *
+ *  HomePage.tsx
+ *  Landing screen with project creation, opening, and recent list.
  *-----------------------------------------------------------------------------------------------*/
 
 import { useEffect, useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { exists } from '@tauri-apps/plugin-fs';
 import { loadVetourFile } from '@/lib/vetourFile';
+import { clearPanoramaCache } from '@/lib/panorama';
 import { open } from '@tauri-apps/plugin-dialog';
 import { Plus, FolderOpen, Clock, Trash2, Settings } from 'lucide-react';
 import { Button } from '../ui/button';
 import { useProjectListStore } from '@/store/projectListStore';
-import { useTourStore } from '@/store/useTourStore';
-import { useToastStore } from '@/store/toastStore';
 import { TourProject } from '@/types/tour';
 import { ProjectEntry } from '@/types/projectEntry';
 import { Modal } from '../ui/Modal';
@@ -20,8 +22,9 @@ import { SettingsModal } from '../Settings/SettingsModal';
 import { Tooltip } from '../ui/Tooltip';
 import { ScrollArea } from '../ui/scroll-area';
 import { lockProjectFile } from '@/lib/fileLock';
-import { DEFAULT_PROJECT_NAME, generateProjectId, MAX_RECENT_PROJECTS_HOME, MAX_RECENT_PROJECTS_MODAL, FILE_FILTER_NAME, FILE_FILTER_EXTENSIONS, FAZELSTUDIO_URL } from '@/constants';
+import { DEFAULT_PROJECT_NAME, MAX_RECENT_PROJECTS_HOME, MAX_RECENT_PROJECTS_MODAL, FILE_FILTER_NAME, FILE_FILTER_EXTENSIONS, FAZELSTUDIO_URL } from '@/constants';
 import fazelStudioIcon from '@/assets/fazelstudio.png';
+import { command } from '@/commands';
 
 
 function formatDate(iso: string) {
@@ -51,8 +54,8 @@ interface HomePageProps {
 }
 
 export const HomePage = ({ onNavigateToEditor, onReady }: HomePageProps) => {
-  const { projects, loaded, loadProjects, removeProject, updateLastOpened, addProject } = useProjectListStore();
-  const loadProject = useTourStore((s) => s.loadProject);
+  const projects = useProjectListStore((s) => s.projects);
+  const loaded = useProjectListStore((s) => s.loaded);
   const [creating, setCreating] = useState(false);
   const [opening, setOpening] = useState(false);
   const [showAllModal, setShowAllModal] = useState(false);
@@ -60,8 +63,8 @@ export const HomePage = ({ onNavigateToEditor, onReady }: HomePageProps) => {
   const [validProjects, setValidProjects] = useState<ProjectEntry[]>([]);
 
   useEffect(() => {
-    loadProjects();
-  }, [loadProjects]);
+    command('project.recent.load', undefined);
+  }, []);
 
   useEffect(() => {
     async function validate() {
@@ -72,7 +75,7 @@ export const HomePage = ({ onNavigateToEditor, onReady }: HomePageProps) => {
           const fileExists = await exists(p.folderPath);
           if (fileExists) valid.push(p);
           else {
-            removeProject(p.id);
+            command('project.recent.remove', p.id);
           }
         } catch {
           valid.push(p);
@@ -83,7 +86,7 @@ export const HomePage = ({ onNavigateToEditor, onReady }: HomePageProps) => {
       onReady?.();
     }
     validate();
-  }, [projects, loaded, removeProject, onReady]);
+  }, [projects, loaded, onReady]);
 
   const recentProjects = useMemo(() => validProjects.slice(0, MAX_RECENT_PROJECTS_HOME), [validProjects]);
   const hasMore = validProjects.length > MAX_RECENT_PROJECTS_HOME;
@@ -92,17 +95,8 @@ export const HomePage = ({ onNavigateToEditor, onReady }: HomePageProps) => {
     if (creating) return;
     setCreating(true);
     try {
-      const now = new Date().toISOString();
-      const project: TourProject = {
-        id: generateProjectId(),
-        name: DEFAULT_PROJECT_NAME,
-        createdAt: now,
-        updatedAt: now,
-        scenes: [],
-        assets: [],
-      };
-      loadProject(project);
-      useTourStore.getState().setSavedPath(null);
+      command('project.new', {});
+      clearPanoramaCache();
       onNavigateToEditor();
     } catch (e) {
       console.error('Error creating project', e);
@@ -121,27 +115,34 @@ export const HomePage = ({ onNavigateToEditor, onReady }: HomePageProps) => {
       });
       if (!selected) return;
       const path = typeof selected === 'string' ? selected : selected;
-      useTourStore.getState().setProjectLoading(true);
+      command('ui.set-project-loading', true);
       let data: TourProject;
       try {
+        clearPanoramaCache();
         data = await loadVetourFile(path);
       } catch {
-        useToastStore.getState().addToast({ type: 'danger', message: 'Failed to read file.' });
+        command('ui.set-project-loading', false);
+        command('ui.notify', { type: 'danger', message: 'Failed to read file.' });
         return;
       }
 
       if (!isValidTourProject(data)) {
-        useToastStore.getState().addToast({ type: 'warning', message: 'Invalid project structure. The file is not a valid Vetour project.' });
+        command('ui.set-project-loading', false);
+        command('ui.notify', { type: 'warning', message: 'Invalid project structure. The file is not a valid Vetour project.' });
         return;
       }
 
       const fileName = path.split(/[/\\]/).pop()?.replace(/\.[^.]+$/, '') || data.name;
       const name = data.name === DEFAULT_PROJECT_NAME ? fileName : data.name;
       const project: TourProject = { ...data, name };
-      loadProject(project);
-      useTourStore.getState().setSavedPath(path);
+      const validation = command('project.validation.validate', project) as { issues: unknown[] };
+      if (validation.issues.length > 0) {
+        command('ui.notify', { type: 'warning', message: `${validation.issues.length} project issue(s) found. Review the Navigation tab before publishing.` });
+      }
+      command('project.load', project);
+      command('project.set-saved-path', path);
       onNavigateToEditor(path);
-      addProject({
+      command('project.recent.add', {
         id: project.id,
         name,
         folderPath: path,
@@ -151,7 +152,7 @@ export const HomePage = ({ onNavigateToEditor, onReady }: HomePageProps) => {
       await lockProjectFile(path);
     } catch (e) {
       console.error('Error opening virtual tour', e);
-      useToastStore.getState().addToast({ type: 'danger', message: 'Failed to open project.' });
+      command('ui.notify', { type: 'danger', message: 'Failed to open project.' });
     } finally {
       setOpening(false);
     }
@@ -161,18 +162,19 @@ export const HomePage = ({ onNavigateToEditor, onReady }: HomePageProps) => {
     try {
       const fileExists = await exists(entry.folderPath);
       if (!fileExists) {
-        useToastStore.getState().addToast({ type: 'warning', message: `File "${entry.name}" no longer exists. It has been removed from recent.` });
-        removeProject(entry.id);
+        command('ui.notify', { type: 'warning', message: `File "${entry.name}" no longer exists. It has been removed from recent.` });
+        command('project.recent.remove', entry.id);
         return;
       }
 
-      useTourStore.getState().setProjectLoading(true);
+      command('ui.set-project-loading', true);
       let data: TourProject;
       try {
+        clearPanoramaCache();
         data = await loadVetourFile(entry.folderPath);
         if (!isValidTourProject(data)) throw new Error('Invalid structure');
       } catch {
-        useToastStore.getState().addToast({ type: 'warning', message: 'Failed to read file. Opening empty project.' });
+        command('ui.notify', { type: 'warning', message: 'Failed to read file. Opening empty project.' });
         data = {
           id: entry.id,
           name: entry.name,
@@ -182,20 +184,20 @@ export const HomePage = ({ onNavigateToEditor, onReady }: HomePageProps) => {
           assets: [],
         };
       }
-      updateLastOpened(entry.id);
-      loadProject(data);
-      useTourStore.getState().setSavedPath(entry.folderPath);
+      command('project.recent.touch', entry.id);
+      command('project.load', data);
+      command('project.set-saved-path', entry.folderPath);
       await lockProjectFile(entry.folderPath);
       onNavigateToEditor(entry.folderPath);
     } catch (e) {
       console.error('Error opening project', e);
-      useToastStore.getState().addToast({ type: 'danger', message: 'Failed to open project.' });
+      command('ui.notify', { type: 'danger', message: 'Failed to open project.' });
     }
   };
 
   const handleDelete = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    removeProject(id);
+    command('project.recent.remove', id);
   };
 
   const containerVariants = {
@@ -213,7 +215,16 @@ export const HomePage = ({ onNavigateToEditor, onReady }: HomePageProps) => {
 
   return (
     <div className="relative flex flex-col h-full w-full overflow-hidden bg-background">
-      {!loaded ? null : (
+      {!loaded ? (
+        /*
+        Startup splash with the themed background.
+        The first visible frame looks intentional while validation loads.
+        */
+        <div className="flex flex-col items-center justify-center h-full select-none gap-4">
+          <div className="w-10 h-10 rounded-full border-2 border-border border-t-primary animate-spin" />
+          <div className="text-[10px] tracking-[0.3em] uppercase text-text-secondary">Loading</div>
+        </div>
+      ) : (
         <motion.div
           className="flex flex-col items-center justify-center h-full select-none px-6"
           variants={containerVariants}

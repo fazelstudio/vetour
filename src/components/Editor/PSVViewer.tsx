@@ -1,6 +1,9 @@
 /*-----------------------------------------------------------------------------------------------
  *  Copyright (c) Zulfazli (fazelstudio). All rights reserved.
  *  Licensed under the MIT License. See LICENSE file in the project root for license information.
+ *
+ *  PSVViewer.tsx
+ *  Photo-sphere viewer wrapper with markers, navigation, and scene sync.
  *-----------------------------------------------------------------------------------------------*/
 
 import { useEffect, useRef, useState } from 'react';
@@ -8,167 +11,21 @@ import { Viewer } from '@photo-sphere-viewer/core';
 import { VirtualTourPlugin } from '@photo-sphere-viewer/virtual-tour-plugin';
 import { MarkersPlugin } from '@photo-sphere-viewer/markers-plugin';
 import { useTourStore } from '@/store/useTourStore';
-import { resolvePanoramaUrl, getAssetUrl } from '@/lib/panorama';
+import { command } from '@/commands';
+import { resolvePanoramaUrl } from '@/lib/panorama';
+import { getSceneMarkers, getMarkersKey } from '@/lib/hotspotRender';
 import type { VirtualTourNode } from '@photo-sphere-viewer/virtual-tour-plugin';
-import type { TourProject, TourScene, NavigationHotspot, InfoHotspot } from '@/types/tour';
+import type { TourProject, TourScene } from '@/types/tour';
 import '@photo-sphere-viewer/core/index.css';
 import '@photo-sphere-viewer/markers-plugin/index.css';
 import '@photo-sphere-viewer/virtual-tour-plugin/index.css';
-import { LUCIDE_ICONS } from '@/icons';
 import type { AssetEntry } from '@/types/tour';
 
-export interface HotspotStyle {
-  bgType?: 'solid' | 'gradient';
-  bgColor?: string;
-  bgGradient?: string;
-  textColor?: string;
-  iconColor?: string;
-  radius?: string;
-  icon?: string;
-  fontFamilyAssetId?: string;
-  opacity?: number;
-}
+export type { HotspotStyle } from '@/lib/hotspotRender';
 
-
-
-function getActionMarkerIcon(action: string, label: string, style?: HotspotStyle, fontUrl?: string): string {
-  let iconSvg: string;
-  
-  if (style?.icon && LUCIDE_ICONS[style.icon]) {
-    iconSvg = LUCIDE_ICONS[style.icon];
-  } else {
-    switch (action) {
-      case 'navigate': iconSvg = LUCIDE_ICONS['arrow-up']; break;
-      case 'show_image': iconSvg = LUCIDE_ICONS['image']; break;
-      case 'show_video': iconSvg = LUCIDE_ICONS['video']; break;
-      case 'show_text': iconSvg = LUCIDE_ICONS['file-text']; break;
-      case 'show_document': iconSvg = LUCIDE_ICONS['file-text']; break;
-      case 'play_sound': iconSvg = LUCIDE_ICONS['music']; break;
-      default: iconSvg = LUCIDE_ICONS['info'];
-    }
-  }
-  const bgOpacity = style?.opacity ?? 0.6; // Backward compatibility
-  let bg = style?.bgType === 'gradient' ? (style.bgGradient || 'linear-gradient(90deg, rgba(255,0,0,1) 0%, rgba(0,0,255,1) 100%)') : (style?.bgColor || '#000000');
-  
-  // Convert HEX to RGBA if solid color
-  if (style?.bgType !== 'gradient') {
-    const hex = bg.startsWith('#') ? bg : '#000000';
-    const r = parseInt(hex.slice(1, 3), 16) || 0;
-    const g = parseInt(hex.slice(3, 5), 16) || 0;
-    const b = parseInt(hex.slice(5, 7), 16) || 0;
-    bg = `rgba(${r}, ${g}, ${b}, ${bgOpacity})`;
-  } else {
-    // If it's a gradient, we can't easily apply opacity to the CSS string,
-    // so we could wrap the div or just rely on the gradient's own opacity.
-    // For simplicity, we'll let gradient be as is, but we can also set the div opacity.
-  }
-
-  // User said "Hotspot Opacity", meaning the background opacity or the whole hotspot?
-  // Usually opacity for the background is preferred so text remains readable, but "Hotspot Opacity" implies the whole thing.
-  // I'll apply bgOpacity to the background if solid, and if it's gradient I will just rely on the gradient string (or apply to the background if possible). Let's just use `rgba` for solid.
-
-  const textColor = style?.textColor || '#ffffff';
-  const iconColor = style?.iconColor || '#ffffff';
-  const radius = style?.radius || '9999px';
-  const fontFamily = fontUrl ? `'CustomFont_${style?.fontFamilyAssetId}', sans-serif` : 'sans-serif';
-
-  const fontFormat = fontUrl ? (() => {
-    const ext = fontUrl.split('.').pop()?.toLowerCase();
-    if (ext === 'woff2') return 'woff2';
-    if (ext === 'woff') return 'woff';
-    return 'truetype';
-  })() : '';
-  const fontFaceStyle = fontUrl ? `<style>
-    @font-face {
-      font-family: 'CustomFont_${style!.fontFamilyAssetId}';
-      src: url('${fontUrl}') format('${fontFormat}');
-    }
-  </style>` : '';
-
-  return `
-    ${fontFaceStyle}
-    <div style="
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      padding: 6px 12px;
-      background: ${bg};
-      ${style?.bgType === 'gradient' ? `opacity: ${bgOpacity};` : ''}
-      color: ${textColor};
-      border-radius: ${radius};
-      font-family: ${fontFamily};
-      font-size: 14px;
-      font-weight: 500;
-      cursor: pointer;
-      border: 1px solid rgba(255, 255, 255, 0.2);
-      backdrop-filter: blur(4px);
-      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-      transition: all 0.2s ease-in-out;
-      white-space: nowrap;
-    " onmouseover="this.style.filter='brightness(1.2)';" onmouseout="this.style.filter='brightness(1)';">
-      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${iconColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        ${iconSvg}
-      </svg>
-      <span>${label}</span>
-    </div>
-  `;
-}
-
-function getMarkerId(m: NavigationHotspot | InfoHotspot): string {
-  if ('nodeId' in m) return m.id || 'nav_' + m.nodeId;
-  return m.id || `hotspot_${Math.random().toString(36).substring(2, 9)}`;
-}
-
-function getMarkerData(m: NavigationHotspot | InfoHotspot, assets: AssetEntry[] = []): { id: string; position: { yaw: number; pitch: number }; html: string; anchor?: string, data?: Record<string, unknown> } {
-  const id = getMarkerId(m);
-  const pos = m.position
-    ? { yaw: Number(m.position.yaw) || 0, pitch: Number(m.position.pitch) || 0 }
-    : { yaw: 0, pitch: 0 };
-
-  const md = ('data' in m ? m.data ?? {} : {}) as Record<string, unknown>;
-  const style = md.style as HotspotStyle | undefined;
-  
-  let fontUrl = '';
-  if (style?.fontFamilyAssetId) {
-    const fontAsset = assets.find(a => a.id === style.fontFamilyAssetId);
-    if (fontAsset) {
-      fontUrl = getAssetUrl(fontAsset.path);
-    }
-  }
-
-  if ('nodeId' in m) {
-    const name = m.name || 'Navigate';
-    return {
-      id,
-      position: pos,
-      html: getActionMarkerIcon('navigate', name, style, fontUrl),
-      anchor: 'center center',
-      data: { isNav: true, targetId: m.nodeId, style: md.style }
-    };
-  }
-
-  const action = (md.action as string) || (m.image ? 'show_image' : m.content ? 'show_text' : 'show_text');
-  const tooltip = typeof m.tooltip === 'string' ? m.tooltip : m.tooltip?.content || 'Hotspot';
-  return {
-    id,
-    position: pos,
-    html: getActionMarkerIcon(action, tooltip, style, fontUrl),
-    anchor: 'center center',
-    data: m.data
-  };
-}
-
-function getSceneMarkers(scene: TourScene, assets: AssetEntry[] = []) {
-  const markers: Array<ReturnType<typeof getMarkerData>> = [];
-  for (const link of scene.links) {
-    if (link.nodeId === scene.id) continue;
-    markers.push(getMarkerData(link, assets));
-  }
-  for (const m of scene.markers) {
-    markers.push(getMarkerData(m, assets));
-  }
-  return markers;
-}
+/*
+Marker rendering lives in lib/hotspotRender.ts so extensions can reuse it.
+*/
 
 async function buildNodesLazy(
   project: TourProject,
@@ -187,7 +44,6 @@ async function buildNodesLazy(
           id: scene.id,
           panorama: panoUrl,
           name: scene.name,
-          caption: scene.caption,
           sphereCorrection: scene.sphereCorrection,
           gps: scene.gps,
           map: scene.map as VirtualTourNode['map'],
@@ -199,7 +55,7 @@ async function buildNodesLazy(
     }
   }
 
-  // We process the activeId first so it's first in the array (optional, but good for ordering)
+  // Load the active scene first to keep node order stable.
 
   for (const scene of project.scenes) {
     if (allNodes.some((n) => n.id === scene.id)) continue;
@@ -209,7 +65,6 @@ async function buildNodesLazy(
         id: scene.id,
         panorama: panoUrl,
         name: scene.name,
-        caption: scene.caption,
         sphereCorrection: scene.sphereCorrection,
         gps: scene.gps,
         map: scene.map as VirtualTourNode['map'],
@@ -234,8 +89,9 @@ export const PSVViewer = ({ onPresentMarkerClick, onRightClickPlace, onCancelPla
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<Viewer | null>(null);
   const virtualTourRef = useRef<VirtualTourPlugin | null>(null);
+  const resetRequestedRef = useRef(false);
+  const pendingFocusRef = useRef<{ id: string; position?: { yaw: number; pitch: number } } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const setViewerLoading = useTourStore((s) => s.setViewerLoading);
   const onPresentMarkerClickRef = useRef(onPresentMarkerClick);
   onPresentMarkerClickRef.current = onPresentMarkerClick;
   const onRightClickPlaceRef = useRef(onRightClickPlace);
@@ -246,29 +102,57 @@ export const PSVViewer = ({ onPresentMarkerClick, onRightClickPlace, onCancelPla
   onHotspotDoubleClickRef.current = onHotspotDoubleClick;
   const prevProjectRef = useRef<TourProject | null>(null);
   const prevActiveSceneRef = useRef<string | null>(null);
+  const prevMarkersKeyRef = useRef<string>('');
   const lastClickRef = useRef<{ markerId: string; time: number } | null>(null);
   const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /*
+  Serial load queue: every panorama/node/marker request gets a sequence number
+  and runs through a promise chain, so fast clicks can never overlap.
+  Stale results are discarded instead of overwriting the newest request.
+  */
+  const loadSeqRef = useRef(0);
+  const loadChainRef = useRef<Promise<void>>(Promise.resolve());
 
-  function updateSceneMarkers(markersPlugin: MarkersPlugin, scene: TourScene, assets: AssetEntry[] = []) {
-    markersPlugin.clearMarkers();
-    const markers = getSceneMarkers(scene, assets);
-    markersPlugin.setMarkers(markers);
+  function enqueueLoad(task: (seq: number) => Promise<void>): number {
+    const seq = loadSeqRef.current + 1;
+    loadSeqRef.current = seq;
+    loadChainRef.current = loadChainRef.current
+      .catch(() => {
+        // A previous load failed. Keep the chain alive for the next request.
+      })
+      .then(() => task(seq));
+    return seq;
+  }
+
+  function refreshSceneMarkers(markersPlugin: MarkersPlugin, scene: TourScene, assets: AssetEntry[] = []) {
+    /*
+    setMarkers replaces all markers in one call.
+    No separate clearMarkers, so there is never a blank frame between clear and set.
+    */
+    try {
+      const markers = getSceneMarkers(scene, assets);
+      markersPlugin.setMarkers(markers);
+    } catch (err) {
+      console.warn('[PSV] Marker refresh failed:', err);
+    }
   }
 
   function isSameScenes(a: TourProject, b: TourProject): boolean {
     if (a.scenes.length !== b.scenes.length) return false;
     return a.scenes.every((s, i) => {
       const o = b.scenes[i];
-      // Only reload nodes if the id or panorama image changes.
-      // Name, markers, and links are handled manually or outside the viewer, so they shouldn't trigger a full 3D scene reload.
+      /*
+      Only reload nodes when the id or panorama changes.
+      Names, markers, and links are applied without a full 3D reload.
+      */
       return s.id === o.id && s.panorama === o.panorama;
     });
   }
 
-  // Reset loading flags on mount and unmount to prevent stale state from previous sessions
+  // Clear loading flags on unmount to avoid stale state across sessions.
   useEffect(() => {
     return () => {
-      useTourStore.getState().setViewerLoading(false);
+      command('ui.set-viewer-loading', false);
     };
   }, []);
 
@@ -300,11 +184,13 @@ export const PSVViewer = ({ onPresentMarkerClick, onRightClickPlace, onCancelPla
 
     vp.addEventListener('node-changed', (e) => {
       const s = useTourStore.getState();
-      s.setActiveScene(e.node.id);
-      
+      command('scene.activate', e.node.id);
+      prevActiveSceneRef.current = e.node.id;
+
       const scene = s.project?.scenes.find(sc => sc.id === e.node.id);
       if (scene) {
-        updateSceneMarkers(mp, scene, s.project?.assets || []);
+        prevMarkersKeyRef.current = getMarkersKey(scene, s.project?.assets || []);
+        refreshSceneMarkers(mp, scene, s.project?.assets || []);
       }
     });
 
@@ -328,18 +214,42 @@ export const PSVViewer = ({ onPresentMarkerClick, onRightClickPlace, onCancelPla
     });
 
     viewer.addEventListener('panorama-load', () => {
-      console.log('[PSVViewer] panorama-load event fired!');
-      // We handle loading state explicitly in subscribe to prevent false positives
+      // Loading state is managed in the store subscription to avoid false positives.
     });
 
     viewer.addEventListener('panorama-loaded', () => {
-      setViewerLoading(false);
+      command('ui.set-viewer-loading', false);
       setIsLoading(false);
+      if (resetRequestedRef.current) {
+        resetRequestedRef.current = false;
+        window.setTimeout(() => window.dispatchEvent(new Event('viewer-reset-apply')), 0);
+      }
     });
 
     viewer.addEventListener('panorama-error', () => {
-      // Still hide loading on error so it doesn't get stuck forever
-      setIsLoading(false);
+      /*
+      Keep the previous panorama instead of a blank view.
+      Retry once through the queue; a transient decode failure
+      often succeeds when the texture is requested again.
+      */
+      enqueueLoad(async (seq) => {
+        if (loadSeqRef.current !== seq) return;
+        const s = useTourStore.getState();
+        const scene = s.project?.scenes.find((item) => item.id === s.activeSceneId);
+        if (!scene || !virtualTourRef.current) {
+          setIsLoading(false);
+          return;
+        }
+        try {
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          if (loadSeqRef.current !== seq || !virtualTourRef.current) return;
+          await virtualTourRef.current.setCurrentNode(scene.id);
+        } catch (err) {
+          console.warn('[PSV] Panorama retry failed:', err);
+        } finally {
+          if (loadSeqRef.current === seq) setIsLoading(false);
+        }
+      });
     });
 
     mp.addEventListener('select-marker', (e) => {
@@ -381,7 +291,7 @@ export const PSVViewer = ({ onPresentMarkerClick, onRightClickPlace, onCancelPla
               }, 50);
             }
           } else {
-            state.setSelectedHotspot(markerId);
+            command('selection.set-hotspot', markerId);
           }
           return;
         }
@@ -390,7 +300,7 @@ export const PSVViewer = ({ onPresentMarkerClick, onRightClickPlace, onCancelPla
           onPresentMarkerClickRef.current?.(markerId);
           return;
         }
-        state.setSelectedHotspot(markerId);
+        command('selection.set-hotspot', markerId);
       }, 300);
     });
 
@@ -470,9 +380,9 @@ export const PSVViewer = ({ onPresentMarkerClick, onRightClickPlace, onCancelPla
         if (validPos && activeSceneId) {
           const marker = mp.getMarker(draggingMarkerId);
           if (marker?.config.data?.isNav) {
-            state.updateNavHotspot(activeSceneId, draggingMarkerId, { position: { yaw: validPos.yaw, pitch: validPos.pitch } });
+            command('hotspot.update-nav', { sceneId: activeSceneId, hotspotId: draggingMarkerId, updates: { position: { yaw: validPos.yaw, pitch: validPos.pitch } } });
           } else {
-            state.updateInfoHotspot(activeSceneId, draggingMarkerId, { position: { yaw: validPos.yaw, pitch: validPos.pitch } });
+            command('hotspot.update-info', { sceneId: activeSceneId, hotspotId: draggingMarkerId, updates: { position: { yaw: validPos.yaw, pitch: validPos.pitch } } });
           }
         } else if (draggingInitialPos) {
           mp.updateMarker({ id: draggingMarkerId, position: draggingInitialPos });
@@ -511,37 +421,64 @@ export const PSVViewer = ({ onPresentMarkerClick, onRightClickPlace, onCancelPla
     window.addEventListener('pointerup', handleWindowPointerUp, true);
     window.addEventListener('contextmenu', handleWindowContextMenu, true);
 
+    const focusPendingMarker = () => {
+      const request = pendingFocusRef.current;
+      if (!request) return;
+
+      const marker = mp.getMarker(request.id);
+      const position = request.position ?? (marker?.config.position as { yaw: number; pitch: number } | undefined);
+      if (!position) return;
+
+      viewer.stopAnimation();
+      viewer.rotate({ yaw: position.yaw, pitch: position.pitch });
+      pendingFocusRef.current = null;
+    };
+
     const handleFocusMarker = (e: Event) => {
-      const ce = e as CustomEvent<string>;
-      try {
-        const markerId = ce.detail;
-        console.log('[PSVViewer] Focusing marker:', markerId);
-        const marker = mp.getMarker(markerId);
-        if (marker && marker.config.position) {
-          const pos = marker.config.position as { yaw: number; pitch: number };
-          viewer.animate({
-            yaw: pos.yaw,
-            pitch: pos.pitch,
-            speed: '1s'
-          });
-        } else {
-          console.warn('[PSVViewer] Marker not found or has no position:', markerId);
-        }
-      } catch (err) {
-        console.warn('[PSV] animate to marker failed:', err);
-      }
+      const ce = e as CustomEvent<string | { id: string; position?: { yaw: number; pitch: number } }>;
+      const request = typeof ce.detail === 'string'
+        ? { id: ce.detail }
+        : ce.detail;
+      pendingFocusRef.current = request;
+      focusPendingMarker();
+
+      [50, 150, 350, 700, 1200].forEach((delay) => {
+        window.setTimeout(focusPendingMarker, delay);
+      });
     };
     window.addEventListener('focus-marker', handleFocusMarker);
+    const handleViewerZoom = (e: Event) => {
+      const delta = (e as CustomEvent<number>).detail;
+      viewer.zoom(Math.max(0, Math.min(100, viewer.getZoomLevel() + delta)));
+    };
+    const applyViewerReset = () => {
+      const state = useTourStore.getState();
+      const scene = state.project?.scenes.find((item) => item.id === state.activeSceneId);
+      const position = scene?.data && typeof scene.data === 'object'
+        ? (scene.data as { initialView?: { yaw?: number; pitch?: number; zoom?: number } }).initialView
+        : undefined;
+      viewer.stopAnimation();
+      viewer.rotate({ yaw: position?.yaw ?? 0, pitch: position?.pitch ?? 0 });
+      viewer.zoom(position?.zoom ?? 50);
+    };
+    const handleViewerReset = () => {
+      resetRequestedRef.current = true;
+      applyViewerReset();
+      window.setTimeout(applyViewerReset, 100);
+    };
+    window.addEventListener('viewer-zoom', handleViewerZoom);
+    window.addEventListener('viewer-reset', handleViewerReset);
+    window.addEventListener('viewer-reset-apply', applyViewerReset);
 
     viewerRef.current = viewer;
     virtualTourRef.current = vp;
 
-    // Persistent listener — clears loading state every time a panorama fully renders
+    // Clear loading state every time a panorama finishes rendering.
     const onPanoramaLoaded = () => {
       setTimeout(() => {
-        useTourStore.getState().setViewerLoading(false);
+        command('ui.set-viewer-loading', false);
         setIsLoading(false);
-        // Force resize after the skeleton overlay unmounts
+        // Force a resize after the skeleton overlay unmounts.
         setTimeout(() => {
           window.dispatchEvent(new Event('resize'));
         }, 50);
@@ -552,11 +489,30 @@ export const PSVViewer = ({ onPresentMarkerClick, onRightClickPlace, onCancelPla
     const initNodes = () => {
       if (project && project.scenes.length > 0) {
         setIsLoading(true);
-        buildNodesLazy(project, activeId, (nodes, passedActiveId) => {
-          const plugin = virtualTourRef.current;
-          if (!plugin || !viewerRef.current) return;
+        command('ui.set-viewer-loading', true);
+        const snapshot = project;
+        const snapshotActiveId = activeId;
+        prevMarkersKeyRef.current = getMarkersKey(
+          snapshot.scenes.find((s) => s.id === snapshotActiveId),
+          snapshot.assets || [],
+        );
+        enqueueLoad(async (seq) => {
+          if (loadSeqRef.current !== seq || !virtualTourRef.current || !viewerRef.current) return;
+          const mpNow = viewerRef.current.getPlugin(MarkersPlugin) as MarkersPlugin;
+          const nodes = await new Promise<VirtualTourNode[]>((resolve) => {
+            void buildNodesLazy(snapshot, snapshotActiveId, (built) => resolve(built));
+          });
+          if (loadSeqRef.current !== seq || !virtualTourRef.current || !viewerRef.current) return;
+          if (nodes.length === 0) {
+            setIsLoading(false);
+            command('ui.set-viewer-loading', false);
+            return;
+          }
           try {
-            // Temporarily suppress harmless PSV warnings about no links, because we intentionally handle them manually as custom markers
+            /*
+            Suppress harmless viewer warnings about missing links.
+            Links are rendered manually as custom markers.
+            */
             const originalWarn = console.warn;
             console.warn = (...args) => {
               if (typeof args[0] === 'string') {
@@ -568,33 +524,38 @@ export const PSVViewer = ({ onPresentMarkerClick, onRightClickPlace, onCancelPla
               originalWarn.apply(console, args);
             };
 
-            plugin.setNodes(nodes, passedActiveId);
+            try {
+              virtualTourRef.current.setNodes(nodes, snapshotActiveId);
+            } finally {
+              // Restore the original warning handler after load settles.
+              setTimeout(() => {
+                console.warn = originalWarn;
+              }, 1000);
+            }
 
-            // Restore console.warn after a short delay to catch asynchronous warnings during load
-            setTimeout(() => {
-              console.warn = originalWarn;
-            }, 1000);
-
-            // Dispatch resize to ensure WebGL canvas fills the container properly
+            // Resize the WebGL canvas to fill its container.
             setTimeout(() => {
               window.dispatchEvent(new Event('resize'));
             }, 50);
 
-            // Ensure markers are shown for the initial scene
-            if (passedActiveId) {
-              setTimeout(() => {
-                const initialScene = project.scenes.find(s => s.id === passedActiveId);
-                if (initialScene && mp) updateSceneMarkers(mp, initialScene, project.assets || []);
-              }, 300);
+            // Show markers for the initial scene once the node exists.
+            if (snapshotActiveId && loadSeqRef.current === seq) {
+              const initialScene = snapshot.scenes.find(s => s.id === snapshotActiveId);
+              if (initialScene && mpNow) refreshSceneMarkers(mpNow, initialScene, snapshot.assets || []);
             }
           } catch (err) {
             console.error('[PSV] setNodes failed:', err);
           }
-          // panorama-loaded listener will clear loading state. Fallback below covers cached/instant renders.
-          if (nodes.length === project.scenes.length) {
+          /*
+          The panorama-loaded listener clears loading state.
+          The fallback below covers cached or instant renders.
+          A stale request never clears a newer load in progress.
+          */
+          if (nodes.length === snapshot.scenes.length && loadSeqRef.current === seq) {
             setTimeout(() => {
+              if (loadSeqRef.current !== seq) return;
               setIsLoading(false);
-              setViewerLoading(false);
+              command('ui.set-viewer-loading', false);
               setTimeout(() => {
                 window.dispatchEvent(new Event('resize'));
               }, 50);
@@ -603,7 +564,7 @@ export const PSVViewer = ({ onPresentMarkerClick, onRightClickPlace, onCancelPla
         });
       } else {
         setIsLoading(false);
-        setViewerLoading(false);
+        command('ui.set-viewer-loading', false);
       }
     };
 
@@ -614,7 +575,7 @@ export const PSVViewer = ({ onPresentMarkerClick, onRightClickPlace, onCancelPla
       initNodes();
     }, { once: true });
 
-    // Fallback in case ready event is missed or doesn't fire
+    // Fallback when the ready event is missed or never fires.
     setTimeout(() => {
       if (!isReady) {
         isReady = true;
@@ -628,113 +589,157 @@ export const PSVViewer = ({ onPresentMarkerClick, onRightClickPlace, onCancelPla
       window.removeEventListener('pointerup', handleWindowPointerUp, true);
       window.removeEventListener('contextmenu', handleWindowContextMenu, true);
       window.removeEventListener('focus-marker', handleFocusMarker);
+      window.removeEventListener('viewer-zoom', handleViewerZoom);
+      window.removeEventListener('viewer-reset', handleViewerReset);
+      window.removeEventListener('viewer-reset-apply', applyViewerReset);
       
       viewer.destroy();
       viewerRef.current = null;
       virtualTourRef.current = null;
     };
-  }, [setViewerLoading]);
+  }, []);
 
   useEffect(() => {
     const unsub = useTourStore.subscribe((state) => {
       if (state.isPresentMode || !virtualTourRef.current || !viewerRef.current || !state.project) return;
 
-      const mp = viewerRef.current.getPlugin(MarkersPlugin) as MarkersPlugin;
       const projectChanged = state.project !== prevProjectRef.current;
+      const activeChanged = state.activeSceneId !== prevActiveSceneRef.current;
       let scenesChanged = false;
 
       if (projectChanged) {
         scenesChanged = !prevProjectRef.current || !isSameScenes(state.project, prevProjectRef.current);
-        if (scenesChanged) {
-           console.log('[PSVViewer] scenesChanged is TRUE!', { 
-             prev: prevProjectRef.current?.scenes.map(s => s.id),
-             curr: state.project.scenes.map(s => s.id)
-           });
-        }
         prevProjectRef.current = state.project;
+      }
 
-        if (scenesChanged) {
-          const activeId = state.activeSceneId ?? state.project.scenes[0]?.id;
-          console.log('[PSVViewer] Calling buildNodesLazy');
-          buildNodesLazy(state.project, activeId, (nodes, passedActiveId) => {
-            if (!virtualTourRef.current || !viewerRef.current) return;
+      const snapshot = state.project;
+      const snapshotActiveId = state.activeSceneId ?? snapshot.scenes[0]?.id;
+      const activeScene = snapshot.scenes.find(s => s.id === snapshotActiveId);
+      const markersKey = getMarkersKey(activeScene, snapshot.assets || []);
+      const markersChanged = markersKey !== prevMarkersKeyRef.current;
+      if (markersChanged) prevMarkersKeyRef.current = markersKey;
+
+      if (projectChanged && scenesChanged) {
+        /*
+        Structure changed (open file, add/remove scene, panorama replaced):
+        rebuild nodes through the serial queue. Stale builds are discarded.
+        */
+        setIsLoading(true);
+        command('ui.set-viewer-loading', true);
+        enqueueLoad(async (seq) => {
+          if (loadSeqRef.current !== seq || !virtualTourRef.current || !viewerRef.current) return;
+          const mpNow = viewerRef.current.getPlugin(MarkersPlugin) as MarkersPlugin;
+          const nodes = await new Promise<VirtualTourNode[]>((resolve) => {
+            void buildNodesLazy(snapshot, snapshotActiveId, (built) => resolve(built));
+          });
+          if (loadSeqRef.current !== seq || !virtualTourRef.current || !viewerRef.current) return;
+          if (nodes.length === 0) {
+            setIsLoading(false);
+            command('ui.set-viewer-loading', false);
+            return;
+          }
+          try {
+            // Suppress harmless viewer warnings about missing links.
+            const originalWarn = console.warn;
+            console.warn = (...args) => {
+              if (typeof args[0] === 'string') {
+                if (args[0].includes('Multiple instances of Three.js')) return;
+                if (args[0].includes('has no links')) return;
+                if (args[0].includes('is never linked to')) return;
+              }
+              originalWarn.apply(console, args);
+            };
+
             try {
-              // Temporarily suppress harmless PSV warnings about no links
-              const originalWarn = console.warn;
-              console.warn = (...args) => {
-                if (typeof args[0] === 'string') {
-                  if (args[0].includes('Multiple instances of Three.js')) return;
-                  if (args[0].includes('has no links')) return;
-                  if (args[0].includes('is never linked to')) return;
-                }
-                originalWarn.apply(console, args);
-              };
-
-              virtualTourRef.current.setNodes(nodes, passedActiveId);
-
+              virtualTourRef.current.setNodes(nodes, snapshotActiveId);
+            } finally {
               setTimeout(() => {
                 console.warn = originalWarn;
               }, 1000);
-
-              // Dispatch resize to ensure WebGL canvas fills the container properly
-              setTimeout(() => {
-                window.dispatchEvent(new Event('resize'));
-              }, 50);
-
-              if (passedActiveId) {
-                setTimeout(() => {
-                  const initialScene = state.project?.scenes.find(s => s.id === passedActiveId);
-                  if (initialScene && mp) updateSceneMarkers(mp, initialScene, state.project?.assets || []);
-                }, 300);
-              }
-            } catch (err) {
-              console.error('[PSV] setNodes (subscribe) failed:', err);
             }
-            // After setNodes, loading will be cleared by the panorama-loaded listener.
-            // But add a safety fallback in case panorama-loaded doesn't fire (e.g. cached).
+
+            // Resize the WebGL canvas to fill its container.
             setTimeout(() => {
+              window.dispatchEvent(new Event('resize'));
+            }, 50);
+
+            if (snapshotActiveId && loadSeqRef.current === seq) {
+              const nextScene = snapshot.scenes.find(s => s.id === snapshotActiveId);
+              if (nextScene && mpNow) refreshSceneMarkers(mpNow, nextScene, snapshot.assets || []);
+            }
+            prevActiveSceneRef.current = snapshotActiveId ?? null;
+          } catch (err) {
+            console.error('[PSV] setNodes (subscribe) failed:', err);
+          }
+          /*
+          Loading is cleared by the panorama-loaded listener.
+          Keep a fallback for cached renders that skip the event.
+          */
+          if (loadSeqRef.current === seq) {
+            setTimeout(() => {
+              if (loadSeqRef.current !== seq) return;
               setIsLoading(false);
-              setViewerLoading(false);
+              command('ui.set-viewer-loading', false);
               setTimeout(() => {
                 window.dispatchEvent(new Event('resize'));
               }, 50);
             }, 800);
-          });
-        }
+          }
+        });
+        return;
       }
 
-      if (state.activeSceneId !== prevActiveSceneRef.current) {
+      if (activeChanged) {
         prevActiveSceneRef.current = state.activeSceneId;
-        if (mp) {
-          if (virtualTourRef.current && state.activeSceneId && !scenesChanged) {
+        if (virtualTourRef.current && state.activeSceneId) {
+          enqueueLoad(async (seq) => {
+            if (loadSeqRef.current !== seq || !virtualTourRef.current || !viewerRef.current) return;
             try {
               if (virtualTourRef.current.getCurrentNode()?.id !== state.activeSceneId) {
-                mp.clearMarkers();
-                setTimeout(() => {
-                  virtualTourRef.current?.setCurrentNode(state.activeSceneId!);
-                }, 50);
+                /*
+                Never clear markers before the new node is confirmed.
+                Markers refresh on node-changed, so a failed switch
+                keeps the old panorama and markers instead of a blank view.
+                */
+                setIsLoading(true);
+                await virtualTourRef.current.setCurrentNode(state.activeSceneId!);
               }
-            } catch(e) {
+              if (loadSeqRef.current !== seq || !viewerRef.current) return;
+              const mpNow = viewerRef.current.getPlugin(MarkersPlugin) as MarkersPlugin;
+              const nextScene = useTourStore.getState().project?.scenes.find(s => s.id === state.activeSceneId);
+              if (nextScene && mpNow) {
+                prevMarkersKeyRef.current = getMarkersKey(nextScene, useTourStore.getState().project?.assets || []);
+                refreshSceneMarkers(mpNow, nextScene, useTourStore.getState().project?.assets || []);
+              }
+            } catch (e) {
               console.warn('[PSV] setCurrentNode failed:', e);
+            } finally {
+              if (loadSeqRef.current === seq) {
+                setIsLoading(false);
+                command('ui.set-viewer-loading', false);
+              }
             }
-          }
+          });
         }
-      } else if (projectChanged && !scenesChanged) {
-        // Project metadata changed but scenes are the same (e.g. re-opening same file).
-        // The viewer is already showing the right panorama, so clear loading immediately.
+        return;
+      }
+
+      if (projectChanged && markersChanged) {
+        /*
+        Only hotspot metadata changed (name, icon, color, font, style):
+        the panorama is already correct, so refresh markers in place.
+        This is the real-time path for PropertyPanel edits.
+        */
         setIsLoading(false);
-        setViewerLoading(false);
-        setTimeout(() => {
-          window.dispatchEvent(new Event('resize'));
-        }, 50);
-        const activeScene = state.project.scenes.find(s => s.id === state.activeSceneId);
-        if (mp && activeScene) {
-          updateSceneMarkers(mp, activeScene, state.project.assets || []);
+        command('ui.set-viewer-loading', false);
+        const mpNow = viewerRef.current.getPlugin(MarkersPlugin) as MarkersPlugin;
+        if (mpNow && activeScene) {
+          refreshSceneMarkers(mpNow, activeScene, snapshot.assets || []);
         }
       }
     });
     return unsub;
-  }, [setViewerLoading]);
+  }, []);
 
   return (
     <div className="relative w-full h-full">

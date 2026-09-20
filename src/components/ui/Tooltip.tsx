@@ -1,6 +1,9 @@
 /*-----------------------------------------------------------------------------------------------
  *  Copyright (c) Zulfazli (fazelstudio). All rights reserved.
  *  Licensed under the MIT License. See LICENSE file in the project root for license information.
+ *
+ *  Tooltip.tsx
+ *  Hover tooltip with delayed portal rendering.
  *-----------------------------------------------------------------------------------------------*/
 
 import { useState, useRef, type ReactNode } from 'react';

@@ -26,7 +26,6 @@ Security issues include, but are not limited to:
 - Remote code execution
 - Arbitrary file read/write via the application
 - Injection vulnerabilities
-- Authentication bypass (for the deploy feature)
 - Unsafe deserialization
 
 ## Non-Qualifying Issues
@@ -35,7 +34,6 @@ The following are not considered security vulnerabilities:
 
 - Missing security headers in development mode
 - Dependency vulnerabilities in outdated packages (please update instead)
-- Features explicitly disabled in the open-source build (see README)
 
 ## Preferred Encryption
 

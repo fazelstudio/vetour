@@ -1,6 +1,9 @@
 /*-----------------------------------------------------------------------------------------------
  *  Copyright (c) Zulfazli (fazelstudio). All rights reserved.
  *  Licensed under the MIT License. See LICENSE file in the project root for license information.
+ *
+ *  vite.config.ts
+ *  Vite configuration with Tauri dev server and chunk splitting.
  *-----------------------------------------------------------------------------------------------*/
 
 import { defineConfig } from "vite";
@@ -10,7 +13,7 @@ import path from "path";
 
 const host = process.env.TAURI_DEV_HOST;
 
-// https://vite.dev/config/
+// Vite configuration reference is available at https://vite.dev/config/.
 export default defineConfig(async () => ({
   plugins: [react(), tailwindcss()],
   resolve: {
@@ -19,11 +22,14 @@ export default defineConfig(async () => ({
     },
   },
 
-  // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
-  //
-  // 1. prevent Vite from obscuring rust errors
+  /*
+  Vite options tailored for Tauri development.
+  They apply only to tauri dev and tauri build.
+  1. Keep Rust errors visible in the output.
+  2. Require the fixed dev port expected by Tauri.
+  */
   clearScreen: false,
-  // 2. tauri expects a fixed port, fail if that port is not available
+  // Tauri expects a fixed port and fails when it is unavailable.
   server: {
     port: 1420,
     strictPort: true,
@@ -36,16 +42,13 @@ export default defineConfig(async () => ({
         }
       : undefined,
     watch: {
-      // 3. tell Vite to ignore watching `src-tauri` and `.vetour` files
+      // Ignore Tauri sources and project files during reloads.
       ignored: ["**/src-tauri/**", "**/*.vetour"],
     },
   },
   build: {
     chunkSizeWarningLimit: 2000,
     rollupOptions: {
-      external: [
-        /^\.\.\/deploy\/index$/
-      ],
       output: {
         manualChunks: {
           'vendor': ['react', 'react-dom'],

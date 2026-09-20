@@ -1,6 +1,9 @@
 /*-----------------------------------------------------------------------------------------------
  *  Copyright (c) Zulfazli (fazelstudio). All rights reserved.
  *  Licensed under the MIT License. See LICENSE file in the project root for license information.
+ *
+ *  GridCard.tsx
+ *  Grid tile for assets and scenes with badge and actions.
  *-----------------------------------------------------------------------------------------------*/
 
 import React from 'react';
@@ -56,7 +59,7 @@ export const GridCard: React.FC<GridCardProps> = ({
         isActive ? 'border-primary ring-2 ring-primary ring-opacity-20' : 'border-border'
       } hover:border-primary-subtle`}
     >
-      {/* Badge (top-left) */}
+      {/* Badge in the top-left corner. */}
       {badge && (
         <div className="absolute top-4 left-5 z-10">
           <div className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-primary text-background shadow-sm">
@@ -64,7 +67,7 @@ export const GridCard: React.FC<GridCardProps> = ({
           </div>
         </div>
       )}
-      {/* Action button (top-right) */}
+      {/* Action button in the top-right corner. */}
       {onActionClick && (
         <button
           onClick={(e) => {
@@ -77,7 +80,7 @@ export const GridCard: React.FC<GridCardProps> = ({
         </button>
       )}
 
-      {/* Main Content */}
+      {/* Main content area. */}
       <div className="flex-1 flex flex-col items-center justify-center overflow-hidden rounded-xl mb-3 bg-background">
         {image ? (
           <img src={image} alt={title} className="w-full h-full object-cover" />
@@ -88,7 +91,7 @@ export const GridCard: React.FC<GridCardProps> = ({
         )}
       </div>
 
-      {/* Footer */}
+      {/* Footer with title and subtitle. */}
       <div className="mt-auto">
         <h3 className="text-sm font-medium text-text-primary truncate" title={title}>
           {title}

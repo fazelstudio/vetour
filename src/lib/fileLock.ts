@@ -1,6 +1,9 @@
 /*-----------------------------------------------------------------------------------------------
  *  Copyright (c) Zulfazli (fazelstudio). All rights reserved.
  *  Licensed under the MIT License. See LICENSE file in the project root for license information.
+ *
+ *  fileLock.ts
+ *  Frontend bindings for exclusive project file locking.
  *-----------------------------------------------------------------------------------------------*/
 
 import { invoke } from '@tauri-apps/api/core';

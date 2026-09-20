@@ -1,12 +1,16 @@
 /*-----------------------------------------------------------------------------------------------
  *  Copyright (c) Zulfazli (fazelstudio). All rights reserved.
  *  Licensed under the MIT License. See LICENSE file in the project root for license information.
+ *
+ *  PropertyPanel.tsx
+ *  Inspector for scene settings and hotspot content with live updates.
  *-----------------------------------------------------------------------------------------------*/
 
 import { useMemo, useState, useCallback, useRef, useEffect } from 'react';
 import { useTourStore } from '@/store/useTourStore';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
+import { ResizableTextarea } from '@/components/ResizableTextarea';
 import { ConfirmModal } from '@/components/ui/Modal';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -16,7 +20,8 @@ import { TourScene, NavigationHotspot, InfoHotspot } from '@/types/tour';
 import { HOTSPOT_ACTION_OPTIONS, TEXT_ALIGN_OPTIONS } from '@/constants';
 import { HOTSPOT_ICONS, LUCIDE_ICONS } from '@/icons';
 import { ColorPickerMenu } from '@/components/ui/ColorPickerMenu';
-import type { HotspotStyle } from './PSVViewer';
+import type { HotspotStyle } from '@/lib/hotspotRender';
+import { command } from '@/commands';
 
 type ActionType = 'navigate' | 'show_image' | 'show_video' | 'show_text' | 'play_sound' | 'show_document';
 
@@ -24,15 +29,6 @@ export const PropertyPanel = () => {
   const project = useTourStore((state) => state.project);
   const activeSceneId = useTourStore((state) => state.activeSceneId);
   const selectedHotspotId = useTourStore((state) => state.selectedHotspotId);
-  const updateScene = useTourStore((state) => state.updateScene);
-  const deleteScene = useTourStore((state) => state.deleteScene);
-  const updateInfoHotspot = useTourStore((state) => state.updateInfoHotspot);
-  const deleteInfoHotspot = useTourStore((state) => state.deleteInfoHotspot);
-  const updateNavHotspot = useTourStore((state) => state.updateNavHotspot);
-  const deleteNavHotspot = useTourStore((state) => state.deleteNavHotspot);
-  const addNavHotspot = useTourStore((state) => state.addNavHotspot);
-  const addInfoHotspot = useTourStore((state) => state.addInfoHotspot);
-  const setSelectedHotspot = useTourStore((state) => state.setSelectedHotspot);
 
   const images = useMemo(() => (project?.assets ?? []).filter((a) => a.type === 'image'), [project?.assets]);
   const audioFiles = useMemo(() => (project?.assets ?? []).filter((a) => a.type === 'audio'), [project?.assets]);
@@ -46,7 +42,14 @@ export const PropertyPanel = () => {
   const isNav = !!selectedNavMarker;
   const isInfo = !!selectedInfoMarker;
 
-  const hotspotData = (isInfo && selectedInfoMarker?.data) as Record<string, unknown> | null;
+  /*
+  Navigation hotspots historically stored style in markerStyle, newer saves use data.style.
+  Read both so previously saved appearance is shown instead of resetting to defaults.
+  */
+  const navExtra = selectedNavMarker as unknown as { data?: Record<string, unknown>; markerStyle?: Record<string, unknown> } | undefined;
+  const hotspotData = (isInfo
+    ? selectedInfoMarker?.data
+    : (navExtra?.data ?? (navExtra?.markerStyle ? { style: navExtra.markerStyle } : undefined))) as Record<string, unknown> | null;
   const hotspotAction: ActionType = isNav
     ? 'navigate'
     : (hotspotData?.action as ActionType) || (selectedInfoMarker?.image ? 'show_image' : 'show_text');
@@ -72,10 +75,24 @@ export const PropertyPanel = () => {
           {!selectedHotspotId && (
             <ScenePropertiesForm
               scene={activeScene}
-              onUpdate={updateScene}
-              onDelete={deleteScene}
+              onUpdate={(id, updates) => command('scene.update', { sceneId: id, updates })}
+              onDelete={(id) => command('scene.delete', id)}
+              isStartScene={project?.defaultSceneId === activeScene.id}
+              onSetStart={() => command('project.set-start-scene', { sceneId: activeScene.id })}
               onHotspotClick={(_markerId, internalId) => {
-                setSelectedHotspot(internalId);
+                command('selection.set-hotspot', internalId);
+                const hotspot = [...activeScene.links, ...activeScene.markers].find((item) => {
+                  const id = 'nodeId' in item ? (item.id || `nav_${item.nodeId}`) : item.id;
+                  return id === internalId;
+                });
+                window.dispatchEvent(new CustomEvent('focus-marker', {
+                  detail: {
+                    id: internalId,
+                    position: hotspot?.position
+                      ? { yaw: Number(hotspot.position.yaw) || 0, pitch: Number(hotspot.position.pitch) || 0 }
+                      : undefined,
+                  },
+                }));
               }}
             />
           )}
@@ -94,13 +111,6 @@ export const PropertyPanel = () => {
             videoFiles={videoFiles}
             documentFiles={documentFiles}
             fontFiles={fontFiles}
-            updateInfoHotspot={updateInfoHotspot}
-            deleteInfoHotspot={deleteInfoHotspot}
-            updateNavHotspot={updateNavHotspot}
-            deleteNavHotspot={deleteNavHotspot}
-            addNavHotspot={addNavHotspot}
-            addInfoHotspot={addInfoHotspot}
-            setSelectedHotspot={setSelectedHotspot}
             scenes={project?.scenes || []}
           />
         )}
@@ -114,11 +124,15 @@ function ScenePropertiesForm({
   scene,
   onUpdate,
   onDelete,
+  isStartScene,
+  onSetStart,
   onHotspotClick,
 }: {
   scene: TourScene;
   onUpdate: (id: string, updates: Partial<TourScene>) => void;
   onDelete: (id: string) => void;
+  isStartScene: boolean;
+  onSetStart: () => void;
   onHotspotClick: (markerId: string, internalId: string) => void;
 }) {
   const handleDelete = () => {
@@ -137,13 +151,54 @@ function ScenePropertiesForm({
             />
           </div>
           <div className="space-y-1">
-            <Label>Caption</Label>
-            <Input
-              value={scene.caption || ''}
-              onChange={(e) => onUpdate(scene.id, { caption: e.target.value })}
+            <Label>Description</Label>
+            <ResizableTextarea
+              value={scene.description || ''}
+              onChange={(e) => onUpdate(scene.id, { description: e.target.value })}
+              minLines={1}
+              maxLines={10}
+              placeholder="Describe this scene..."
+              className="w-full"
             />
           </div>
+          <div className="space-y-1">
+            <Label>Editor notes</Label>
+            <ResizableTextarea
+              value={scene.notes || ''}
+              onChange={(e) => onUpdate(scene.id, { notes: e.target.value })}
+              minLines={1}
+              maxLines={10}
+              placeholder="Private notes for this scene..."
+              className="w-full"
+            />
+          </div>
+          <Button variant={isStartScene ? 'secondary' : 'outline'} size="sm" className="w-full justify-start" onClick={onSetStart}>
+            {isStartScene ? 'Start scene' : 'Set as start scene'}
+          </Button>
         </div>
+
+        {(scene.markers.length > 0 || scene.links.length > 0) && (
+          <div className="mt-8">
+            <h3 className="text-sm font-semibold border-b border-border pb-2 text-text-primary mb-3">Hotspots</h3>
+            <div className="space-y-2">
+              {scene.links.map(link => (
+                <Button key={link.id || `nav_${link.nodeId}`} variant="outline" size="sm" className="w-full justify-start text-xs font-normal h-8" onClick={() => onHotspotClick(link.id || `nav_${link.nodeId}`, link.id || `nav_${link.nodeId}`)}>
+                  <MapPin className="w-3 h-3 mr-2 text-primary" />
+                  {link.name || 'Navigate'}
+                </Button>
+              ))}
+              {scene.markers.map(marker => {
+                const name = typeof marker.tooltip === 'string' ? marker.tooltip : marker.tooltip?.content || 'Hotspot';
+                return (
+                  <Button key={marker.id} variant="outline" size="sm" className="w-full justify-start text-xs font-normal h-8" onClick={() => onHotspotClick(marker.id, marker.id)}>
+                    <Info className="w-3 h-3 mr-2 text-blue-500" />
+                    {name}
+                  </Button>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
         <div className="pt-4 border-t border-border mt-4 flex gap-2">
           <Button variant="danger" size="sm" className="w-full" onClick={handleDelete}>
@@ -151,29 +206,6 @@ function ScenePropertiesForm({
           </Button>
         </div>
       </div>
-
-      {(scene.markers.length > 0 || scene.links.length > 0) && (
-        <div className="mt-8">
-          <h3 className="text-sm font-semibold border-b border-border pb-2 text-text-primary mb-3">Hotspots</h3>
-          <div className="space-y-2">
-            {scene.links.map(link => (
-              <Button key={link.id || `nav_${link.nodeId}`} variant="outline" size="sm" className="w-full justify-start text-xs font-normal h-8" onClick={() => onHotspotClick(link.id || `nav_${link.nodeId}`, link.id || `nav_${link.nodeId}`)}>
-                <MapPin className="w-3 h-3 mr-2 text-primary" />
-                {link.name || 'Navigate'}
-              </Button>
-            ))}
-            {scene.markers.map(marker => {
-              const name = typeof marker.tooltip === 'string' ? marker.tooltip : marker.tooltip?.content || 'Hotspot';
-              return (
-                <Button key={marker.id} variant="outline" size="sm" className="w-full justify-start text-xs font-normal h-8" onClick={() => onHotspotClick(marker.id, marker.id)}>
-                  <Info className="w-3 h-3 mr-2 text-blue-500" />
-                  {name}
-                </Button>
-              )
-            })}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -191,13 +223,6 @@ function UnifiedHotspotForm({
   videoFiles,
   documentFiles,
   fontFiles,
-  updateInfoHotspot,
-  deleteInfoHotspot,
-  updateNavHotspot,
-  deleteNavHotspot,
-  addNavHotspot,
-  addInfoHotspot,
-  setSelectedHotspot,
   scenes,
 }: {
   sceneId: string;
@@ -212,13 +237,6 @@ function UnifiedHotspotForm({
   videoFiles: { path: string; name: string }[];
   documentFiles: { path: string; name: string }[];
   fontFiles: { id: string; name: string }[];
-  updateInfoHotspot: (sceneId: string, hotspotId: string, updates: Partial<InfoHotspot>) => void;
-  deleteInfoHotspot: (sceneId: string, hotspotId: string) => void;
-  updateNavHotspot: (sceneId: string, hotspotId: string, updates: Partial<NavigationHotspot>) => void;
-  deleteNavHotspot: (sceneId: string, hotspotId: string) => void;
-  addNavHotspot: (sceneId: string, hotspot: NavigationHotspot) => void;
-  addInfoHotspot: (sceneId: string, hotspot: InfoHotspot) => void;
-  setSelectedHotspot: (id: string | null) => void;
   scenes: { id: string; name?: string }[];
 }) {
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
@@ -260,7 +278,7 @@ function UnifiedHotspotForm({
 
   const handleSave = useCallback(() => {
     const position = isNav ? navMarker?.position : infoMarker?.position;
-    
+
     if (localAction === 'navigate') {
       if (!localNavTarget) return;
       const newNavHotspot: NavigationHotspot = {
@@ -269,20 +287,23 @@ function UnifiedHotspotForm({
         name: localTooltip,
         position,
       };
-      
-      // Merge localStyle if not empty
-      if (Object.keys(localStyle).length > 0) {
-        newNavHotspot.markerStyle = localStyle as unknown as Record<string, unknown>;
-      }
-      
+
+      /*
+      Persist style in both markerStyle (legacy) and data.style (unified).
+      The viewer reads both, so old and new projects stay compatible.
+      Always persist, even when empty, so resetting to defaults is real-time too.
+      */
+      newNavHotspot.markerStyle = localStyle as unknown as Record<string, unknown>;
+      const infoToNavData = { style: localStyle };
+
       if (!isNav) {
-        // Also ensure data.style is stored for unified reading
-        const infoToNav = { ...newNavHotspot, data: { style: localStyle } } as unknown as NavigationHotspot;
-        deleteInfoHotspot(sceneId, hotspotId);
-        addNavHotspot(sceneId, infoToNav);
-        setSelectedHotspot(infoToNav.id!);
+        // Keep data.style in sync for unified style reading.
+        const infoToNav = { ...newNavHotspot, data: infoToNavData } as unknown as NavigationHotspot;
+        command('hotspot.delete-info', { sceneId, hotspotId });
+        command('hotspot.add-nav', { sceneId, hotspot: infoToNav });
+        command('selection.set-hotspot', infoToNav.id!);
       } else {
-        updateNavHotspot(sceneId, hotspotId, { name: localTooltip, nodeId: localNavTarget, data: { style: localStyle } } as unknown as Partial<NavigationHotspot>);
+        command('hotspot.update-nav', { sceneId, hotspotId, updates: { name: localTooltip, nodeId: localNavTarget, markerStyle: localStyle as unknown as Record<string, unknown>, data: infoToNavData } as unknown as Partial<NavigationHotspot> });
       }
     } else {
       const dataUpdates: Record<string, unknown> = { action: localAction };
@@ -290,11 +311,10 @@ function UnifiedHotspotForm({
       if (localAction === 'play_sound') { dataUpdates.audio = localAudio; dataUpdates.autoPlay = localAutoPlay; }
       if (localAction === 'show_video') dataUpdates.video = localVideo;
       if (localAction === 'show_document') dataUpdates.document = localDocument;
-      
-      if (Object.keys(localStyle).length > 0) {
-        dataUpdates.style = localStyle;
-      }
-      
+
+      // Always include style so appearance edits apply instantly, including resets.
+      dataUpdates.style = localStyle;
+
       const newInfoHotspot: InfoHotspot = {
         id: !isNav ? hotspotId : `hotspot_${Math.random().toString(36).substring(2, 9)}`,
         position,
@@ -305,14 +325,50 @@ function UnifiedHotspotForm({
       };
 
       if (isNav) {
-        deleteNavHotspot(sceneId, hotspotId);
-        addInfoHotspot(sceneId, newInfoHotspot);
-        setSelectedHotspot(newInfoHotspot.id);
+        command('hotspot.delete-nav', { sceneId, hotspotId });
+        command('hotspot.add-info', { sceneId, hotspot: newInfoHotspot });
+        command('selection.set-hotspot', newInfoHotspot.id);
       } else {
-        updateInfoHotspot(sceneId, hotspotId, newInfoHotspot);
+        command('hotspot.update-info', { sceneId, hotspotId, updates: newInfoHotspot });
       }
     }
-  }, [isNav, navMarker, infoMarker, localAction, localNavTarget, localTooltip, localStyle, hotspotId, sceneId, deleteInfoHotspot, addNavHotspot, setSelectedHotspot, updateNavHotspot, localTextAlign, localAudio, localAutoPlay, localVideo, localDocument, localContent, localImage, deleteNavHotspot, addInfoHotspot, updateInfoHotspot]);
+  }, [isNav, navMarker, infoMarker, localAction, localNavTarget, localTooltip, localStyle, hotspotId, sceneId, localTextAlign, localAudio, localAutoPlay, localVideo, localDocument, localContent, localImage]);
+
+  /*
+  Immediate style writer for real-time preview.
+  Appearance controls (icon, color, font, background, opacity, radius) call this
+  instead of only buffering in local state, so the viewer updates in the same
+  tick without waiting for the autosave effect. The autosave effect below
+  intentionally excludes localStyle to avoid a double commit per change.
+  */
+  const applyStylePatch = useCallback((patch: Partial<HotspotStyle> | HotspotStyle) => {
+    const next = { ...localStyle, ...patch };
+    setLocalStyle(next);
+    const stableType = isNav === (localAction === 'navigate');
+    if (!stableType) return;
+    try {
+      if (isNav) {
+        command('hotspot.update-nav', { sceneId, hotspotId, updates: {
+          markerStyle: next as unknown as Record<string, unknown>,
+          data: { style: next },
+        } as unknown as Partial<NavigationHotspot> });
+      } else {
+        const dataUpdates: Record<string, unknown> = { action: localAction, style: next };
+        if (localAction === 'show_text') dataUpdates.textAlign = localTextAlign;
+        if (localAction === 'play_sound') { dataUpdates.audio = localAudio; dataUpdates.autoPlay = localAutoPlay; }
+        if (localAction === 'show_video') dataUpdates.video = localVideo;
+        if (localAction === 'show_document') dataUpdates.document = localDocument;
+        command('hotspot.update-info', { sceneId, hotspotId, updates: {
+          tooltip: localTooltip,
+          content: localAction === 'show_text' ? localContent : undefined,
+          image: localAction === 'show_image' ? localImage : undefined,
+          data: dataUpdates,
+        } });
+      }
+    } catch {
+      // Autosave effect will flush the buffered style on the next render.
+    }
+  }, [localStyle, isNav, localAction, sceneId, hotspotId, localTextAlign, localAudio, localAutoPlay, localVideo, localDocument, localTooltip, localContent, localImage]);
 
   const handleSaveRef = useRef(handleSave);
   useEffect(() => {
@@ -324,13 +380,18 @@ function UnifiedHotspotForm({
       isInitialMount.current = false;
       return;
     }
-    
+
     handleSaveRef.current();
-  }, [localAction, localImage, localContent, localVideo, localTextAlign, localAutoPlay, localAudio, localDocument, localNavTarget, localStyle, localTooltip]);
+    /*
+    Style is excluded here because applyStylePatch already persists
+    appearance edits synchronously for real-time preview.
+    Including it would commit twice per color/icon change.
+    */
+  }, [localAction, localImage, localContent, localVideo, localTextAlign, localAutoPlay, localAudio, localDocument, localNavTarget, localTooltip]);
 
   const handleDelete = () => {
-    if (isNav) deleteNavHotspot(sceneId, hotspotId);
-    else deleteInfoHotspot(sceneId, hotspotId);
+    if (isNav) command('hotspot.delete-nav', { sceneId, hotspotId });
+    else command('hotspot.delete-info', { sceneId, hotspotId });
     setDeleteTarget(null);
   };
 
@@ -475,7 +536,7 @@ function UnifiedHotspotForm({
               <Label>Icon</Label>
               <Select
                 value={localStyle.icon || 'info'}
-                onChange={(v) => setLocalStyle(prev => ({ ...prev, icon: v }))}
+                onChange={(v) => applyStylePatch({ icon: v })}
                 options={[{ value: 'info', label: 'Default' }, ...HOTSPOT_ICONS.map(i => ({
                   value: i.value,
                   label: (
@@ -492,7 +553,7 @@ function UnifiedHotspotForm({
               label="Icon Color"
               bgType="solid"
               bgColor={localStyle.iconColor || '#ffffff'}
-              onChange={(_type, c) => setLocalStyle(prev => ({ ...prev, iconColor: c }))}
+              onChange={(_type, c) => applyStylePatch({ iconColor: c })}
               disableGradient
             />
 
@@ -510,7 +571,7 @@ function UnifiedHotspotForm({
               ) : (
                 <Select
                   value={localStyle.fontFamilyAssetId || ''}
-                  onChange={(v) => setLocalStyle(prev => ({ ...prev, fontFamilyAssetId: v }))}
+                  onChange={(v) => applyStylePatch({ fontFamilyAssetId: v })}
                   placeholder="Select a font..."
                   options={[{ value: '', label: 'Default System Font' }, ...fontFiles.map(f => ({ value: f.id, label: f.name }))]}
                 />
@@ -521,7 +582,7 @@ function UnifiedHotspotForm({
               label="Text Color"
               bgType="solid"
               bgColor={localStyle.textColor || '#ffffff'}
-              onChange={(_type, c) => setLocalStyle(prev => ({ ...prev, textColor: c }))}
+              onChange={(_type, c) => applyStylePatch({ textColor: c })}
               disableGradient
             />
           </div>
@@ -536,7 +597,7 @@ function UnifiedHotspotForm({
               bgType={localStyle.bgType || 'solid'}
               bgColor={localStyle.bgColor || '#000000'}
               bgGradient={localStyle.bgGradient || 'linear-gradient(90deg, rgba(255,0,0,1) 0%, rgba(0,0,255,1) 100%)'}
-              onChange={(type, c, g) => setLocalStyle(prev => ({ ...prev, bgType: type, bgColor: c, bgGradient: g }))}
+              onChange={(type, c, g) => applyStylePatch({ bgType: type, bgColor: c, bgGradient: g })}
             />
 
             <div className="grid grid-cols-2 gap-3">
@@ -551,7 +612,7 @@ function UnifiedHotspotForm({
                     onChange={(e) => {
                       const v = parseInt(e.target.value);
                       if (!isNaN(v)) {
-                        setLocalStyle(prev => ({ ...prev, opacity: Math.max(10, Math.min(100, v)) / 100 }));
+                        applyStylePatch({ opacity: Math.max(10, Math.min(100, v)) / 100 });
                       }
                     }}
                     className="pr-6"
@@ -568,7 +629,7 @@ function UnifiedHotspotForm({
                     min="0"
                     max="100"
                     value={localStyle.radius ? parseInt(localStyle.radius) : 50} 
-                    onChange={(e) => setLocalStyle(prev => ({ ...prev, radius: e.target.value + '%' }))}
+                    onChange={(e) => applyStylePatch({ radius: e.target.value + '%' })}
                     className="pr-6"
                   />
                   <span className="absolute right-2 top-1/2 -translate-y-1/2 text-text-secondary text-xs pointer-events-none">%</span>

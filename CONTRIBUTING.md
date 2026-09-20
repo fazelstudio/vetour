@@ -4,7 +4,7 @@ First off, thank you for considering contributing to Vetour! It's people like yo
 
 ## Code of Conduct
 
-This project and everyone participating in it is governed by the [Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code. Please report unacceptable behavior via the [GitHub issues](https://github.com/fazelllyyy/vetour/issues).
+This project and everyone participating in it is governed by the [Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code. Please report unacceptable behavior via the [GitHub issues](https://github.com/fazelstudio/vetour/issues).
 
 ## How Can I Contribute?
 
@@ -34,11 +34,12 @@ Enhancement suggestions are tracked as GitHub issues. When creating one:
 1. **Fork the repository** and create your branch from `main`.
 2. **Install dependencies** with `bun install`.
 3. **Make your changes** following the code style of the project.
-4. **Run type checking and linting** before submitting:
+4. **Run type checking, linting, and SDK tests** before submitting:
 
    ```bash
    bun run check
    bun run lint
+   bun run sdk:test
    ```
 
 5. **Test your changes** by running the app:
@@ -53,7 +54,7 @@ Enhancement suggestions are tracked as GitHub issues. When creating one:
 ### Development Setup
 
 ```bash
-git clone https://github.com/fazelllyyy/vetour.git
+git clone https://github.com/fazelstudio/vetour.git
 cd vetour
 bun install
 bun run tauri dev
@@ -75,10 +76,24 @@ Make sure you have the [prerequisites](README.md#prerequisites) installed.
 
 - This project uses TypeScript's strict mode.
 - Avoid `any` types where possible — prefer `unknown` and type guards.
-- Do not hardcode values — import from `src/constants.ts` for reusable constants.
+- Do not hardcode reusable values — import from the appropriate centralized
+  constants module.
 - Do not hardcode CSS values — use Tailwind utility classes and CSS variables from `src/index.css`.
 - Follow the existing patterns in the codebase.
 - Run `bun run lint` to check for style issues.
+
+### Architecture Rules
+
+- Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) before changing folder
+  boundaries.
+- UI code must use commands for project mutations; do not call Zustand
+  mutation methods directly from new features.
+- Keep `.vetour` persistence and native Tauri integration in `src/lib`.
+- Keep persisted data contracts in `src/types`.
+- New extension-facing actions must be added to the typed command map and
+  documented in [docs/EXTENSIONS.md](docs/EXTENSIONS.md).
+- Prefer compatibility re-exports when moving public modules so existing
+  contributors and extensions are not broken unnecessarily.
 
 ### Rust Style
 
