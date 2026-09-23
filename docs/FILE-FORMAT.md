@@ -1,7 +1,7 @@
-# Vetour Project File Format (`.vetour`)
+# Obsipano Project File Format (`.obsipano`)
 
-This document specifies the binary layout of Vetour project files. The
-reference implementation is `src/lib/vetourFile.ts`, with validation and
+This document specifies the binary layout of Obsipano project files. The
+reference implementation is `src/lib/obsipanoFile.ts`, with validation and
 normalization in `src/lib/projectValidation.ts`.
 
 Related documents: `docs/ARCHITECTURE.md`, `docs/PRD.md`.
@@ -32,9 +32,13 @@ assets. Readers must still accept it for backward compatibility.
 
 ```text
 offset  size      field
-0       4 bytes   magic: 0x56 0x54 0x00 0x01 ("VT" + 0x00 + 0x01)
+0       4 bytes   magic: 0x4F 0x42 0x00 0x01 ("OB" + 0x00 + 0x01)
 4       rest      gzip-compressed TourProject JSON
 ```
+
+Assets referenced by a v1 project resolve from their original filesystem
+paths at load time. Readers must still accept the legacy Vetour magic
+(`0x56 0x54`, "VT") for backward compatibility.
 
 Assets referenced by a v1 project resolve from their original filesystem
 paths at load time.
@@ -46,7 +50,7 @@ portable.
 
 ```text
 offset  size      field
-0       4 bytes   magic: 0x56 0x54 0x00 0x02 ("VT" + 0x00 + 0x02)
+0       4 bytes   magic: 0x4F 0x42 0x00 0x02 ("OB" + 0x00 + 0x02)
 4       u32       fileCount (number of embedded assets)
 ...               fileCount asset entries (see below)
 ...       u32       jsonLength (bytes of the gzip section)
@@ -76,7 +80,8 @@ skipped.
 
 1. Verify the file is at least 4 bytes; otherwise report corruption.
 2. Match the magic bytes against v1 or v2; anything else is rejected as
-   "not a valid Vetour project file".
+   "not a valid Obsipano project file". Legacy Vetour ("VT") magic is
+   accepted for backward compatibility.
 3. For v2, revoke blob URLs from any previously loaded project, then read
    each asset entry with bounds checks at every step (path length, path
    bytes, data length, data bytes). Truncation at any point is a
@@ -111,4 +116,4 @@ writers that do not understand them.
 Distributable plugins use a separate versioned container (magic `"VEIX"`,
 format version, gzip manifest), specified by the reference implementation
 in `src/lib/pluginPackage.ts`. The installer gate accepts only files that
-pass `plugin.validate-file`; the `.vetour` rules above do not apply to it.
+pass `plugin.validate-file`; the `.obsipano` rules above do not apply to it.

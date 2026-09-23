@@ -1,21 +1,21 @@
 # Extension Development
 
-Vetour extensions are built around the command registry so they can add
+Obsipano extensions are built around the command registry so they can add
 capabilities without coupling themselves to React components or Zustand
 internals.
 
 ## SDK package
 
-The `vetour-sdk` workspace package (`packages/vetour-sdk`) is the typed
-entry point for extensions, published as `vetour-sdk` on npmjs and as
-`@fazelstudio/vetour-sdk` on GitHub Packages. Its API is organized by
+The `obsipano-sdk` workspace package (`packages/obsipano-sdk`) is the typed
+entry point for extensions, published as `obsipano-sdk` on npmjs and as
+`@fazelstudio/obsipano-sdk` on GitHub Packages. Its API is organized by
 namespace: one `activate`
 function receives namespaced hosts (`commands`, `window`, `workspace`,
 `tour`, `present`, `media`, `extensions`) plus a context that collects
 disposables for unload.
 
 ```ts
-import { defineExtension } from 'vetour-sdk';
+import { defineExtension } from 'obsipano-sdk';
 
 export default defineExtension({
   id: 'publisher.feature',

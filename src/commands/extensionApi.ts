@@ -54,7 +54,7 @@ export type ExtensionLifecycleEvent =
   | 'present:open'
   | 'present:close';
 
-export interface VetourExtension {
+export interface ObsipanoExtension {
   id: string;
   name: string;
   version: string;
@@ -65,7 +65,7 @@ export interface VetourExtension {
 }
 
 interface InstalledRecord {
-  extension: VetourExtension;
+  extension: ObsipanoExtension;
   disposeCommands: (() => void)[];
   contributionIds: { kind: keyof ExtensionContributions; id: string }[];
 }
@@ -149,7 +149,7 @@ function unregisterContributions(entries: { kind: keyof ExtensionContributions; 
   }
 }
 
-export function installExtension(extension: VetourExtension): () => void {
+export function installExtension(extension: ObsipanoExtension): () => void {
   if (extensions.has(extension.id)) {
     throw new Error(`Extension "${extension.id}" is already installed.`);
   }
@@ -186,9 +186,15 @@ export function installExtension(extension: VetourExtension): () => void {
   };
 }
 
-export function listInstalledExtensions(): VetourExtension[] {
+export function listInstalledExtensions(): ObsipanoExtension[] {
   return [...extensions.values()].map((record) => record.extension);
 }
+
+/*
+Legacy Vetour-era alias kept for backward compatibility.
+New code must use the Obsipano names above.
+*/
+export type VetourExtension = ObsipanoExtension;
 
 export function listMenuContributions(): (MenuContribution & { extensionId: string })[] {
   return [...menuContributions.values()];

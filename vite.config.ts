@@ -43,7 +43,7 @@ export default defineConfig(async () => ({
       : undefined,
     watch: {
       // Ignore Tauri sources and project files during reloads.
-      ignored: ["**/src-tauri/**", "**/*.vetour"],
+      ignored: ["**/src-tauri/**", "**/*.obsipano"],
     },
   },
   build: {

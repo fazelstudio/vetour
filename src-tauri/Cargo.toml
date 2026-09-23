@@ -7,7 +7,7 @@
 #-----------------------------------------------------------------------------------------------
 
 [package]
-name = "vetour"
+name = "obsipano"
 version = "1.0.0"
 description = "A cross-platform desktop app for creating and presenting immersive 360° virtual tours"
 authors = ["Zulfazli (fazelstudio)"]
@@ -19,7 +19,7 @@ edition = "2021"
 # The `_lib` suffix looks redundant, but it keeps the lib name unique.
 # It avoids conflicts with the binary name, mainly on Windows.
 # See https://github.com/rust-lang/cargo/issues/8519.
-name = "vetour_lib"
+name = "obsipano_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

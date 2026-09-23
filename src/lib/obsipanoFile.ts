@@ -2,8 +2,8 @@
  *  Copyright (c) Zulfazli (fazelstudio). All rights reserved.
  *  Licensed under the MIT License. See LICENSE file in the project root for license information.
  *
- *  vetourFile.ts
- *  Reader and writer for the compressed .vetour project file format.
+ *  obsipanoFile.ts
+ *  Reader and writer for the compressed .obsipano project file format.
  *-----------------------------------------------------------------------------------------------*/
 
 import { writeFile, readFile, mkdir } from '@tauri-apps/plugin-fs';
@@ -13,8 +13,10 @@ import { gzip, ungzip } from 'pako';
 import type { TourProject } from '../types/tour';
 import { normalizeProject, validateProject } from './projectValidation';
 
-const V1_MAGIC = new Uint8Array([0x56, 0x54, 0x00, 0x01]);
-const V2_MAGIC = new Uint8Array([0x56, 0x54, 0x00, 0x02]);
+const V1_MAGIC = new Uint8Array([0x4f, 0x42, 0x00, 0x01]);
+const V2_MAGIC = new Uint8Array([0x4f, 0x42, 0x00, 0x02]);
+const LEGACY_V1_MAGIC = new Uint8Array([0x56, 0x54, 0x00, 0x01]);
+const LEGACY_V2_MAGIC = new Uint8Array([0x56, 0x54, 0x00, 0x02]);
 
 function concatBuffers(arrays: Uint8Array[]): Uint8Array {
   const totalLength = arrays.reduce((sum, a) => sum + a.length, 0);
@@ -89,13 +91,13 @@ function decompressJson(data: Uint8Array): TourProject {
 }
 
 /*
-Blob URL cache for assets extracted from .vetour files.
+Blob URL cache for assets extracted from .obsipano files.
 Maps original paths to blob URLs so they can be revoked on close or reload.
 */
 export const blobUrlCache = new Map<string, string>();
 export const blobDataCache = new Map<string, Uint8Array>(); // Blob URL to raw bytes for saving.
 
-export function revokeVetourBlobs(): void {
+export function revokeObsipanoBlobs(): void {
   for (const url of blobUrlCache.values()) {
     URL.revokeObjectURL(url);
   }
@@ -103,11 +105,11 @@ export function revokeVetourBlobs(): void {
   blobDataCache.clear();
 }
 
-export function saveVetourFile(path: string, project: TourProject): Promise<void> {
-  return _saveVetourFile(path, project, readFile);
+export function saveObsipanoFile(path: string, project: TourProject): Promise<void> {
+  return _saveObsipanoFile(path, project, readFile);
 }
 
-async function _saveVetourFile(
+async function _saveObsipanoFile(
   path: string,
   project: TourProject,
   diskRead: (p: string) => Promise<Uint8Array>,
@@ -148,7 +150,7 @@ async function _saveVetourFile(
   await writeFile(path, concatBuffers([V2_MAGIC, binSection, writeU32(gz.length), gz]));
 }
 
-export async function loadVetourFile(filePath: string): Promise<TourProject> {
+export async function loadObsipanoFile(filePath: string): Promise<TourProject> {
   const raw = await readFile(filePath);
 
   if (raw.length < 4) {
@@ -157,15 +159,15 @@ export async function loadVetourFile(filePath: string): Promise<TourProject> {
 
   const magic = raw.slice(0, 4);
 
-  // Legacy v1 format with gzip JSON only.
-  if (arraysEq(magic, V1_MAGIC)) {
+  // Legacy v1 format with gzip JSON only (including Vetour-era files).
+  if (arraysEq(magic, V1_MAGIC) || arraysEq(magic, LEGACY_V1_MAGIC)) {
     return decompressJson(raw.slice(4));
   }
 
-  // V2 format with embedded binary assets.
-  if (arraysEq(magic, V2_MAGIC)) {
+  // V2 format with embedded binary assets (including Vetour-era files).
+  if (arraysEq(magic, V2_MAGIC) || arraysEq(magic, LEGACY_V2_MAGIC)) {
     // Revoke blobs from the previous load before replacing them.
-    revokeVetourBlobs();
+    revokeObsipanoBlobs();
 
     let off = 4;
     const fileCount = readU32(raw, off);
@@ -192,7 +194,7 @@ export async function loadVetourFile(filePath: string): Promise<TourProject> {
 
       
       const tDir = await tempDir();
-      const sessionDir = await join(tDir, 'vetour_session');
+      const sessionDir = await join(tDir, 'obsipano_session');
       await mkdir(sessionDir, { recursive: true });
       const tempPath = await join(sessionDir, safeName);
       await writeFile(tempPath, fdata);
@@ -212,5 +214,13 @@ export async function loadVetourFile(filePath: string): Promise<TourProject> {
     return project;
   }
 
-  throw new Error('This is not a valid Vetour project file.');
+  throw new Error('This is not a valid Obsipano project file.');
 }
+
+/*
+Legacy Vetour-era aliases kept for backward compatibility.
+New code must use the Obsipano names above.
+*/
+export const revokeVetourBlobs = revokeObsipanoBlobs;
+export const saveVetourFile = saveObsipanoFile;
+export const loadVetourFile = loadObsipanoFile;

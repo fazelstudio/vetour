@@ -12,7 +12,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="light dark" />
-    <title>Vetour</title>
+    <title>Obsipano</title>
     <script>
       /*
       Pre-paint theme bootstrap that runs before the first paint.
@@ -21,7 +21,7 @@
       */
       (function () {
         try {
-          var stored = localStorage.getItem('vetour-theme');
+          var stored = localStorage.getItem('obsipano-theme') || localStorage.getItem('vetour-theme');
           var theme = stored === 'light' || stored === 'dark' || stored === 'black' ? stored : 'system';
           var resolved = theme;
           if (theme === 'system') {

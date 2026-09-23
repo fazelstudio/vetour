@@ -29,6 +29,16 @@ export function getStoredTheme(): Theme {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (isTheme(stored)) return stored;
+    // Migrate from the legacy Vetour key on first run after rename.
+    const legacy = localStorage.getItem('vetour-theme');
+    if (isTheme(legacy)) {
+      try {
+        localStorage.setItem(STORAGE_KEY, legacy);
+      } catch {
+        // Ignore migration write errors.
+      }
+      return legacy;
+    }
   } catch {
     // Storage may be unavailable; fall through to the default.
   }

@@ -1,10 +1,10 @@
-# Contributing to Vetour
+# Contributing to Obsipano
 
-First off, thank you for considering contributing to Vetour! It's people like you that make this project better.
+First off, thank you for considering contributing to Obsipano! It's people like you that make this project better.
 
 ## Code of Conduct
 
-This project and everyone participating in it is governed by the [Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code. Please report unacceptable behavior via the [GitHub issues](https://github.com/fazelstudio/vetour/issues).
+This project and everyone participating in it is governed by the [Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code. Please report unacceptable behavior via the [GitHub issues](https://github.com/fazelstudio/obsipano/issues).
 
 ## How Can I Contribute?
 
@@ -26,7 +26,7 @@ Enhancement suggestions are tracked as GitHub issues. When creating one:
 
 - **Use a clear and descriptive title**.
 - **Describe the current behavior** and **explain what you'd like to happen**.
-- **Explain why this enhancement would be useful** to most Vetour users.
+- **Explain why this enhancement would be useful** to most Obsipano users.
 - **Include mockups or examples** if applicable.
 
 ### Pull Requests
@@ -54,8 +54,8 @@ Enhancement suggestions are tracked as GitHub issues. When creating one:
 ### Development Setup
 
 ```bash
-git clone https://github.com/fazelstudio/vetour.git
-cd vetour
+git clone https://github.com/fazelstudio/obsipano.git
+cd obsipano
 bun install
 bun run tauri dev
 ```
@@ -88,7 +88,7 @@ Make sure you have the [prerequisites](README.md#prerequisites) installed.
   boundaries.
 - UI code must use commands for project mutations; do not call Zustand
   mutation methods directly from new features.
-- Keep `.vetour` persistence and native Tauri integration in `src/lib`.
+- Keep `.obsipano` persistence and native Tauri integration in `src/lib`.
 - Keep persisted data contracts in `src/types`.
 - New extension-facing actions must be added to the typed command map and
   documented in [docs/EXTENSIONS.md](docs/EXTENSIONS.md).

@@ -126,7 +126,7 @@ export interface ExtensionsNamespace {
 Root API object handed to `activate`.
 One namespace per concern.
 */
-export interface VetourAPI {
+export interface ObsipanoAPI {
   commands: CommandsNamespace;
   window: WindowNamespace;
   workspace: WorkspaceNamespace;
@@ -135,3 +135,9 @@ export interface VetourAPI {
   media: MediaNamespace;
   extensions: ExtensionsNamespace;
 }
+
+/*
+Legacy Vetour-era alias kept for backward compatibility.
+New code must use ObsipanoAPI.
+*/
+export type VetourAPI = ObsipanoAPI;

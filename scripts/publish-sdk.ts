@@ -12,11 +12,11 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const PKG_DIR = join(__dirname, '..', 'packages', 'vetour-sdk');
+const PKG_DIR = join(__dirname, '..', 'packages', 'obsipano-sdk');
 const PKG_FILE = join(PKG_DIR, 'package.json');
 const NPM_REGISTRY = 'https://registry.npmjs.org/';
 const GITHUB_REGISTRY = 'https://npm.pkg.github.com/';
-const GITHUB_NAME = '@fazelstudio/vetour-sdk';
+const GITHUB_NAME = '@fazelstudio/obsipano-sdk';
 
 const args = new Set(process.argv.slice(2));
 const withGithub = args.has('--github');
@@ -38,12 +38,12 @@ async function runPublish(cwd: string, registry: string, label: string): Promise
 
 const original = readFileSync(PKG_FILE, 'utf8');
 const manifest = JSON.parse(original) as { name?: string };
-if (manifest.name !== 'vetour-sdk') {
-  throw new Error(`Expected package name "vetour-sdk", found "${manifest.name ?? 'none'}".`);
+if (manifest.name !== 'obsipano-sdk') {
+  throw new Error(`Expected package name "obsipano-sdk", found "${manifest.name ?? 'none'}".`);
 }
 
 try {
-  await runPublish(PKG_DIR, NPM_REGISTRY, 'vetour-sdk');
+  await runPublish(PKG_DIR, NPM_REGISTRY, 'obsipano-sdk');
   if (withGithub) {
     // GitHub Packages requires the owner scope, so rename only for this publish.
     writeFileSync(PKG_FILE, JSON.stringify({ ...manifest, name: GITHUB_NAME }, null, 2) + '\n');

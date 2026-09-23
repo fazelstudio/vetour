@@ -6,7 +6,7 @@
  *  Extension manifest, context, and activation signature.
  *-----------------------------------------------------------------------------------------------*/
 
-import type { VetourAPI } from './api';
+import type { ObsipanoAPI } from './api';
 import type { ExtensionContributions } from './contributions';
 import type { Disposable } from './disposable';
 
@@ -39,7 +39,7 @@ export interface ExtensionManifest {
   version: string;
   commands?: ExtensionCommand[];
   contributions?: ExtensionContributions;
-  activate?: (api: VetourAPI, context: ExtensionContext) => void | Promise<void>;
+  activate?: (api: ObsipanoAPI, context: ExtensionContext) => void | Promise<void>;
   deactivate?: () => void | Promise<void>;
 }
 

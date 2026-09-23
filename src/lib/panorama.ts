@@ -10,7 +10,7 @@ import { convertFileSrc } from '@tauri-apps/api/core';
 import { readFile } from '@tauri-apps/plugin-fs';
 import { getMime } from '@/constants';
 
-import { blobUrlCache } from './vetourFile';
+import { blobUrlCache } from './obsipanoFile';
 
 export function getAssetUrl(path: string): string {
   if (!path) return '';

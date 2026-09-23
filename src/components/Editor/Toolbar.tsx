@@ -12,7 +12,7 @@ import { useTourStore } from '@/store/useTourStore';
 import { Play, Save, FolderOpen, Plus, ChevronLeft, Undo2, Redo2, Settings2 } from 'lucide-react';
 import { useState } from 'react';
 import { save, open } from '@tauri-apps/plugin-dialog';
-import { loadVetourFile } from '@/lib/vetourFile';
+import { loadObsipanoFile } from '@/lib/obsipanoFile';
 
 import { lockProjectFile } from '@/lib/fileLock';
 import { DEFAULT_PROJECT_NAME, FILE_FILTER_NAME, FILE_FILTER_EXTENSIONS } from '@/constants';
@@ -55,7 +55,7 @@ export const Toolbar = ({ onNavigateHome }: ToolbarProps) => {
         filters: [{ name: FILE_FILTER_NAME, extensions: [...FILE_FILTER_EXTENSIONS] }]
       });
       if (selected && typeof selected === 'string') {
-        const data = await loadVetourFile(selected);
+        const data = await loadObsipanoFile(selected);
         const fileName = selected.split(/[/\\]/).pop()?.replace(/\.[^.]+$/, '') || data.name;
         const name = data.name === DEFAULT_PROJECT_NAME ? fileName : data.name;
         const next = { ...data, name };
@@ -96,7 +96,7 @@ export const Toolbar = ({ onNavigateHome }: ToolbarProps) => {
       } else {
         const selected = await save({
           filters: [{ name: FILE_FILTER_NAME, extensions: [...FILE_FILTER_EXTENSIONS] }],
-          defaultPath: `${currentProject.name}.vetour`
+          defaultPath: `${currentProject.name}.obsipano`
         });
         if (selected) {
           await doSave(selected);

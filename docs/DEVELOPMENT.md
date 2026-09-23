@@ -1,6 +1,6 @@
-# Vetour Development Guide
+# Obsipano Development Guide
 
-Practical reference for building, verifying, and troubleshooting Vetour.
+Practical reference for building, verifying, and troubleshooting Obsipano.
 Product context lives in `docs/PRD.md`; structural rules live in
 `docs/ARCHITECTURE.md` and `AGENTS.md`.
 
@@ -14,8 +14,8 @@ Product context lives in `docs/PRD.md`; structural rules live in
 ## 2. Setup
 
 ```bash
-git clone https://github.com/fazelstudio/vetour.git
-cd vetour
+git clone https://github.com/fazelstudio/obsipano.git
+cd obsipano
 bun install
 ```
 
@@ -39,7 +39,7 @@ frame is painted.
 Run these before submitting any change:
 
 ```bash
-bun run check        # TypeScript type checking (app + vetour-sdk)
+bun run check        # TypeScript type checking (app + obsipano-sdk)
 bun run lint         # ESLint over the frontend
 bun run sdk:test     # Headless SDK functional tests (40+ assertions)
 ```
@@ -53,7 +53,7 @@ cargo clippy
 
 Manual checks worth doing for user-facing changes:
 
-1. Create, edit, save, reopen a `.vetour` project.
+1. Create, edit, save, reopen a `.obsipano` project.
 2. Exercise every hotspot action in both Edit preview and Present mode.
 3. Open the Present window while fully offline.
 
@@ -71,7 +71,7 @@ Manual checks worth doing for user-facing changes:
 | `bun run sidecar:download` | Re-download the local development FFmpeg binary    |
 | `bun run sdk:test`         | Run the headless SDK functional tests              |
 
-Build configuration: app identifier `com.fazli.vetour`, `.vetour` file
+Build configuration: app identifier `com.fazli.obsipano`, `.obsipano` file
 association, frontend served from the dev server on port 1420 in
 development (see `src-tauri/tauri.conf.json` and `vite.config.ts`).
 
@@ -97,7 +97,7 @@ development (see `src-tauri/tauri.conf.json` and `vite.config.ts`).
 - **Present window shows stale data:** check the Rust present-data channel
   (`store_present_data` / `get_present_data`) and the
   `sync-present-data` event wiring in `presentWindow.ts`.
-- **`.vetour` fails to open:** the loader reports corruption causes
+- **`.obsipano` fails to open:** the loader reports corruption causes
   (truncated sections, gzip/JSON failures); validate the file layout
   against `docs/FILE-FORMAT.md` before changing the reader.
 - **Theme flash on startup:** the pre-paint script in `index.html`,

@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE file in the project root for license information.
  *
  *  index.ts
- *  Public barrel for the Vetour extension SDK modules.
+ *  Public barrel for the Obsipano extension SDK modules.
  *-----------------------------------------------------------------------------------------------*/
 
 export * from './disposable';

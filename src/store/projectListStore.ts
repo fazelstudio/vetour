@@ -14,9 +14,18 @@ const STORAGE_KEY = STORAGE_KEY_PROJECTS;
 
 function loadFromStorage(): ProjectEntry[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem('vetour-projects');
     if (!raw) return [];
-    return JSON.parse(raw) as ProjectEntry[];
+    const parsed = JSON.parse(raw) as ProjectEntry[];
+    // Migrate from the legacy Vetour key on first run after rename.
+    if (!localStorage.getItem(STORAGE_KEY) && raw) {
+      try {
+        localStorage.setItem(STORAGE_KEY, raw);
+      } catch {
+        // Ignore migration write errors.
+      }
+    }
+    return parsed;
   } catch {
     return [];
   }

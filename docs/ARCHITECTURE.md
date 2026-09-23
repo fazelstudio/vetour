@@ -1,6 +1,6 @@
-# Vetour Architecture
+# Obsipano Architecture
 
-Vetour is a Tauri desktop application with a React frontend. The repository is
+Obsipano is a Tauri desktop application with a React frontend. The repository is
 organized by responsibility rather than by implementation detail:
 
 ```text
@@ -15,7 +15,7 @@ src/
 ├── icons.ts        # Hotspot icon SVG path map
 └── App.tsx         # Frontend composition and window lifecycle
 
-packages/vetour-sdk/  # Extension SDK (namespaced API, contributions, manifest)
+packages/obsipano-sdk/  # Extension SDK (namespaced API, contributions, manifest)
 
 src-tauri/src/
 ├── lib.rs              # Tauri bootstrap and command registration
@@ -52,7 +52,7 @@ adapter layer is introduced.
 This is the stable public API for editor actions. `commandRegistry.ts` defines
 the typed `CommandMap`, `registerCoreCommands.ts` binds commands to the core
 store, `extensionApi.ts` provides extension lifecycle management, and
-`sdkHost.ts` implements the `vetour-sdk` API over the same registries.
+`sdkHost.ts` implements the `obsipano-sdk` API over the same registries.
 `index.ts` re-exports the modules as the public barrel. Core commands also
 emit lifecycle events (`project:load`, `project:save`, `present:open`,
 `present:close`) consumed by SDK event subscriptions.
@@ -93,7 +93,7 @@ native-platform logic.
 ### `lib`
 
 This folder contains reusable infrastructure and pure helpers. Keep
-serialization (`vetourFile.ts`), validation (`projectValidation.ts`), media
+serialization (`obsipanoFile.ts`), validation (`projectValidation.ts`), media
 integration (`panorama.ts`, `ffmpeg.ts`, `mediaPipeline.ts`,
 `mediaSettings.ts`), project lifecycle (`projectLifecycle.ts`), navigation
 analysis (`navigationAnalysis.ts`), hotspot rendering (`hotspotRender.ts`),
@@ -183,7 +183,7 @@ used as fallback when conversion is unavailable.
 
 ## Persistence boundary
 
-`.vetour` serialization is isolated in `src/lib/vetourFile.ts`. The loader
+`.obsipano` serialization is isolated in `src/lib/obsipanoFile.ts`. The loader
 must normalize older projects and validate references before the project
 reaches the editor. The UI should report validation failures through
 user-facing notifications rather than relying on console output. The binary
@@ -193,5 +193,5 @@ layout (magic bytes, asset section, compressed JSON) is specified in
 ## Safe refactoring rule
 
 Prefer incremental moves with compatibility re-exports. A structural change
-must preserve the `.vetour` file format and existing extension command IDs
+must preserve the `.obsipano` file format and existing extension command IDs
 unless a migration is explicitly added.

@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Vetour",
+  "productName": "Obsipano",
   "version": "1.1.0",
-  "identifier": "com.fazli.vetour",
+  "identifier": "com.fazli.obsipano",
   "build": {
     "beforeDevCommand": "bun run dev",
     "devUrl": "http://localhost:1420",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Vetour",
+        "title": "Obsipano",
         "width": 1200,
         "height": 800,
         "minWidth": 960,
@@ -43,9 +43,9 @@
     ],
     "fileAssociations": [
       {
-        "ext": ["vetour"],
-        "name": "Vetour Project",
-        "description": "Vetour Virtual Tour Project File",
+        "ext": ["obsipano"],
+        "name": "Obsipano Project",
+        "description": "Obsipano Virtual Tour Project File",
         "mimeType": "application/json"
       }
     ],
@@ -55,7 +55,7 @@
       }
     },
     "resources": {
-      "icons/vetour-file.ico": "vetour-file.ico"
+      "icons/obsipano-file.ico": "obsipano-file.ico"
     }
   }
 }

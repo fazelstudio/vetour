@@ -7,7 +7,7 @@
  *-----------------------------------------------------------------------------------------------*/
 
 import { save } from '@tauri-apps/plugin-dialog';
-import { saveVetourFile } from '@/lib/vetourFile';
+import { saveObsipanoFile } from '@/lib/obsipanoFile';
 import { lockProjectFile, unlockProjectFile } from '@/lib/fileLock';
 import { useTourStore } from '@/store/useTourStore';
 import { useProjectListStore } from '@/store/projectListStore';
@@ -30,7 +30,7 @@ function fileNameFromPath(path: string, fallback: string): string {
 async function persistToPath(path: string, project: TourProject): Promise<void> {
   const updated: TourProject = { ...project, updatedAt: new Date().toISOString() };
   await unlockProjectFile();
-  await saveVetourFile(path, updated);
+  await saveObsipanoFile(path, updated);
   await lockProjectFile(path);
   const tour = useTourStore.getState();
   tour.updateProject(updated);
@@ -97,7 +97,7 @@ export async function saveCurrentProjectAs(): Promise<boolean> {
   try {
     const selected = await save({
       filters: [{ name: FILE_FILTER_NAME, extensions: [...FILE_FILTER_EXTENSIONS] }],
-      defaultPath: `${project.name}.vetour`,
+      defaultPath: `${project.name}.obsipano`,
     });
     if (!selected) return false;
     await persistToPath(selected, project);

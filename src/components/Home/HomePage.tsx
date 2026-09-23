@@ -9,7 +9,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { exists } from '@tauri-apps/plugin-fs';
-import { loadVetourFile } from '@/lib/vetourFile';
+import { loadObsipanoFile } from '@/lib/obsipanoFile';
 import { clearPanoramaCache } from '@/lib/panorama';
 import { open } from '@tauri-apps/plugin-dialog';
 import { Plus, FolderOpen, Clock, Trash2, Settings } from 'lucide-react';
@@ -119,7 +119,7 @@ export const HomePage = ({ onNavigateToEditor, onReady }: HomePageProps) => {
       let data: TourProject;
       try {
         clearPanoramaCache();
-        data = await loadVetourFile(path);
+        data = await loadObsipanoFile(path);
       } catch {
         command('ui.set-project-loading', false);
         command('ui.notify', { type: 'danger', message: 'Failed to read file.' });
@@ -128,7 +128,7 @@ export const HomePage = ({ onNavigateToEditor, onReady }: HomePageProps) => {
 
       if (!isValidTourProject(data)) {
         command('ui.set-project-loading', false);
-        command('ui.notify', { type: 'warning', message: 'Invalid project structure. The file is not a valid Vetour project.' });
+        command('ui.notify', { type: 'warning', message: 'Invalid project structure. The file is not a valid Obsipano project.' });
         return;
       }
 
@@ -171,7 +171,7 @@ export const HomePage = ({ onNavigateToEditor, onReady }: HomePageProps) => {
       let data: TourProject;
       try {
         clearPanoramaCache();
-        data = await loadVetourFile(entry.folderPath);
+        data = await loadObsipanoFile(entry.folderPath);
         if (!isValidTourProject(data)) throw new Error('Invalid structure');
       } catch {
         command('ui.notify', { type: 'warning', message: 'Failed to read file. Opening empty project.' });

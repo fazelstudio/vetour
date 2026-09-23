@@ -1,18 +1,18 @@
-# Vetour — Product Requirements Document (PRD)
+# Obsipano — Product Requirements Document (PRD)
 
 ## 1. Overview
 
-Vetour is a cross-platform desktop application for creating, editing, and
+Obsipano is a cross-platform desktop application for creating, editing, and
 presenting immersive 360° virtual tours. Users import panoramic images,
 connect scenes with navigation hotspots, enrich scenes with media hotspots,
 and present the finished tour fullscreen — fully offline.
 
 | Item             | Value                                                        |
 |------------------|--------------------------------------------------------------|
-| Product name     | Vetour                                                       |
-| App identifier   | `com.fazli.vetour`                                           |
+| Product name     | Obsipano                                                     |
+| App identifier   | `com.fazli.obsipano`                                         |
 | Platforms        | Windows, macOS, Linux (Tauri 2 bundles)                      |
-| Project files    | `.vetour` (single-file, compressed, with embedded assets)    |
+| Project files    | `.obsipano` (single-file, compressed, with embedded assets)  |
 | Current version  | 1.x                                                          |
 
 Related documents: `docs/ARCHITECTURE.md`, `docs/FILE-FORMAT.md`,
@@ -26,10 +26,10 @@ Related documents: `docs/ARCHITECTURE.md`, `docs/FILE-FORMAT.md`,
    images without writing code.
 2. Work fully offline for authoring and presenting; the network is only
    needed for the one-time optional FFmpeg download.
-3. Keep a single-file project format (`.vetour`) that is portable and
+3. Keep a single-file project format (`.obsipano`) that is portable and
    resilient to corruption.
 4. Provide a clean, distraction-free Present mode for client demos.
-5. Stay extensible through the typed command registry, the `vetour-sdk`
+5. Stay extensible through the typed command registry, the `obsipano-sdk`
    package, contribution points, and official `.veix` plugin files.
 
 ### Non-Goals (current scope)
@@ -44,7 +44,7 @@ Related documents: `docs/ARCHITECTURE.md`, `docs/FILE-FORMAT.md`,
 
 - **Property agents and hospitality staff** showcasing spaces to clients.
 - **Museum, education, and showroom teams** building self-guided tours.
-- **Freelance creators** delivering tour files (`.vetour`) to clients.
+- **Freelance creators** delivering tour files (`.obsipano`) to clients.
 
 All personas share one expectation: open the app, build the tour, press
 Present, and show it — without internet or technical setup.
@@ -76,7 +76,7 @@ future use without transformation of the core scene/hotspot structure.
 
 - Create a new unsaved project (`Untitled`) and enter the editor directly;
   no save dialog at creation time.
-- Open `.vetour` files via file picker or the recent-projects list.
+- Open `.obsipano` files via file picker or the recent-projects list.
 - Save to a chosen path (Save As for new projects, in-place afterwards);
   show dirty state (`*`) in the titlebar.
 - Autosave modified projects on an interval when a saved path exists.
@@ -91,7 +91,7 @@ future use without transformation of the core scene/hotspot structure.
 - Edit scene name, description, and private editor notes.
 - Reorder scenes (drag and drop), duplicate scenes, delete scenes.
 - Designate exactly one start scene; visually badge it on scene cards.
-- Resolve panoramas from local files, blob URLs (loaded `.vetour`),
+- Resolve panoramas from local files, blob URLs (loaded `.obsipano`),
   `asset:` protocol URLs, or http(s); fall back gracefully with a
   validation warning when a panorama is missing.
 
@@ -174,10 +174,10 @@ Full persistence rules live in `docs/FILE-FORMAT.md`.
   no network access.
 - **Responsiveness:** panorama processing and media conversion run in the
   Rust backend with progress events; the UI never blocks on conversion.
-- **Robustness:** corrupted or truncated `.vetour` files produce clear
+- **Robustness:** corrupted or truncated `.obsipano` files produce clear
   user-facing errors, never a silent broken state; unreadable assets are
   skipped at save with the project still writable.
-- **Native integration:** custom titlebar with window controls, `.vetour`
+- **Native integration:** custom titlebar with window controls, `.obsipano`
   file association, minimum window size enforced at 60% of the monitor.
 - **Accessibility basics:** keyboard dismissal for menus/dialogs,
   labeled controls, visible focus states.
@@ -189,7 +189,7 @@ Full persistence rules live in `docs/FILE-FORMAT.md`.
 2. All six hotspot actions render correctly in both Edit preview and
    Present window.
 3. Present window works with the machine fully offline.
-4. Corrupted `.vetour` file shows a readable error; valid files nearby
+4. Corrupted `.obsipano` file shows a readable error; valid files nearby
    still open.
 5. FFmpeg download can be cancelled, resumed, removed, and reinstalled.
 6. `bun run check` and `bun run lint` pass on a clean tree.

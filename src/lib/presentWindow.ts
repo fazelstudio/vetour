@@ -10,7 +10,7 @@ import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { TourProject } from '@/types/tour';
-import { blobUrlCache } from './vetourFile';
+import { blobUrlCache } from './obsipanoFile';
 import { DEFAULT_PROJECT_NAME, PRESENT_WINDOW_SIZE_RATIO, PRESENT_WINDOW_MIN_RATIO } from '@/constants';
 
 export interface PresentWindowEvents {

@@ -1,6 +1,6 @@
 <div align="center">
-  <img src="src-tauri/icons/icon.png" alt="Vetour" width="80" height="80" />
-  <h1>Vetour</h1>
+  <img src="src-tauri/icons/icon.png" alt="Obsipano" width="80" height="80" />
+  <h1>Obsipano</h1>
   <p><strong>Virtual Tour Creator — Desktop App</strong></p>
   <p>
     <a href="#features">Features</a> •
@@ -20,7 +20,7 @@
 
 ---
 
-**Vetour** is a cross-platform desktop application for creating, editing, and presenting immersive 360° virtual tours. Built with [Tauri 2](https://v2.tauri.app/), [React 19](https://react.dev/), and [Photo Sphere Viewer](https://photo-sphere-viewer.js.org/), it offers a smooth, native experience for crafting interactive walkthroughs from panoramic images.
+**Obsipano** is a cross-platform desktop application for creating, editing, and presenting immersive 360° virtual tours. Built with [Tauri 2](https://v2.tauri.app/), [React 19](https://react.dev/), and [Photo Sphere Viewer](https://photo-sphere-viewer.js.org/), it offers a smooth, native experience for crafting interactive walkthroughs from panoramic images.
 
 ## Features
 
@@ -30,7 +30,7 @@
 - **Virtual Tour Mode** — Seamlessly connect scenes into a guided walkthrough.
 - **Asset Manager** — Import and manage images, audio, video, and documents.
 - **Present Mode** — Separate full-screen presentation window with a clean interface.
-- **Project File (.vetour)** — Save and load projects in a custom file format with compression.
+- **Project File (.obsipano)** — Save and load projects in a custom file format with compression.
 - **Multi-Resolution Processing** — Automatic panorama resizing (low, medium, high) to WebP.
 - **Media Conversion** — Automatic audio/video conversion for optimized playback.
 - **File Locking** — Safe concurrent access to project files across windows.
@@ -38,7 +38,7 @@
 - **Theme Support** — Light, dark, and black themes.
 - **Command Architecture** — Every editor action runs through a typed
   command registry consumed by the UI and by extensions.
-- **Extension SDK** — Namespaced `vetour-sdk` API (`commands`, `window`,
+- **Extension SDK** — Namespaced `obsipano-sdk` API (`commands`, `window`,
   `workspace`, `tour`, `present`, `media`, `extensions`) with contribution
   points (menus, panels, hotspot/document renderers, validation rules).
 - **Official Plugin Files (.veix)** — Versioned, validated plugin packages;
@@ -58,8 +58,8 @@ Before you begin, ensure you have the following installed:
 
 ```bash
 # Clone the repository
-git clone https://github.com/fazelstudio/vetour.git
-cd vetour
+git clone https://github.com/fazelstudio/obsipano.git
+cd obsipano
 
 # Install JavaScript dependencies (downloads a local FFmpeg copy for development only)
 bun install
@@ -107,8 +107,8 @@ The output binaries will be placed in `src-tauri/target/release/bundle/`.
 
 ### Build Configuration
 
-- **Identifier**: `com.fazli.vetour`
-- **File Association**: `.vetour` — virtual tour project files
+- **Identifier**: `com.fazli.obsipano`
+- **File Association**: `.obsipano` — virtual tour project files
 - **Supported Targets**: Windows (NSIS installer), macOS (.dmg), Linux (.deb, .AppImage)
 
 ## Tech Stack
@@ -127,7 +127,7 @@ The output binaries will be placed in `src-tauri/target/release/bundle/`.
 ## Project Structure
 
 ```
-vetour/
+obsipano/
 ├── src/                      # Frontend source (React + TypeScript)
 │   ├── commands/              # Typed command API, extension boundary, SDK host adapter
 │   ├── components/            # Feature screens and shared UI primitives
@@ -141,7 +141,7 @@ vetour/
 │   ├── store/                 # Zustand state and mutation orchestration
 │   ├── types/                 # Persisted project and public contracts
 │   └── constants.ts           # Shared defaults and limits
-├── packages/vetour-sdk/      # Extension SDK (published to npmjs + GitHub Packages)
+├── packages/obsipano-sdk/      # Extension SDK (published to npmjs + GitHub Packages)
 ├── scripts/                  # Dev scripts (sidecar download, SDK publish/test)
 ├── src-tauri/                # Tauri backend (Rust)
 │   ├── src/

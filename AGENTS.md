@@ -1,4 +1,4 @@
-# AGENTS.md — Working Rules for AI Agents in the Vetour Project
+# AGENTS.md — Working Rules for AI Agents in the Obsipano Project
 
 This file is mandatory guidance for every AI agent working in this repository.
 Follow all rules below in order. Never make assumptions on high-impact
@@ -6,7 +6,7 @@ architecture decisions — stop and ask the developer instead.
 
 ## 1. Project Overview
 
-**Vetour** is a cross-platform desktop application for creating and
+**Obsipano** is a cross-platform desktop application for creating and
 presenting immersive 360° virtual tours.
 
 | Layer            | Technology                                                              |
@@ -20,7 +20,7 @@ presenting immersive 360° virtual tours.
 
 Usage modes: **Edit** (authoring tours, offline), **Present** (fullscreen
 showcase, offline), and **Publish** (future plan — see `docs/PRD.md`).
-Do not confuse Vetour with **Fazel Studio**, which is the developer's
+Do not confuse Obsipano with **Fazel Studio**, which is the developer's
 separately hosted website.
 
 ## 2. Allowed Commands
@@ -40,7 +40,7 @@ bun run tauri build  # distributable package
 Rust rules:
 
 - Format with `rustfmt`, check with `cargo clippy` before submitting.
-- Never change Tauri command IDs or the `.vetour` file format without an
+- Never change Tauri command IDs or the `.obsipano` file format without an
   explicit migration (see `docs/ARCHITECTURE.md` and `docs/FILE-FORMAT.md`).
 
 ## 3. External Library Documentation (Context7)
@@ -148,7 +148,7 @@ components -> types/constants
   new command in `CommandMap` (`commandRegistry.ts`), then register it in
   `registerCoreCommands.ts`.
 - Native integrations (file dialogs, windows, file watching, FFmpeg,
-  `.vetour` serialization) belong in `src/lib`. Never put platform logic
+  `.obsipano` serialization) belong in `src/lib`. Never put platform logic
   in components.
 - Persisted data contracts belong in `src/types`. Never put runtime
   behavior in types files.
@@ -175,7 +175,7 @@ Reference documents: `docs/ARCHITECTURE.md`, `docs/EXTENSIONS.md`,
    `bun run check` and `bun run lint` for frontend changes;
    `cargo clippy` for Rust changes. Report the results, including any
    finding that overturns an earlier interpretation.
-6. **Protect public formats and IDs.** Changes to the `.vetour` format or
+6. **Protect public formats and IDs.** Changes to the `.obsipano` format or
    extension command IDs must include migration/compatibility handling.
 7. **Never auto-save/commit/push** unless the user explicitly asks.
    The user controls when to save and commit.

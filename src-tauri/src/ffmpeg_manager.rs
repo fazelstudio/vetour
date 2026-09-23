@@ -18,7 +18,7 @@ use std::sync::{
 use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::io::AsyncWriteExt;
 
-const SIDECAR_REPO: &str = "fazelstudio/vetour";
+const SIDECAR_REPO: &str = "fazelstudio/obsipano";
 const SIDECAR_TAG: &str = "ffmpeg-sidecar-v1";
 
 #[derive(Default)]
@@ -357,7 +357,7 @@ pub async fn check_ffmpeg_connection() -> Result<bool, String> {
 
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(8))
-        .user_agent("Vetour")
+        .user_agent("Obsipano")
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 
@@ -515,7 +515,7 @@ async fn download_ffmpeg_inner(
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(60))
         .connect_timeout(std::time::Duration::from_secs(15))
-        .user_agent("Vetour")
+        .user_agent("Obsipano")
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 

@@ -7,7 +7,7 @@
  *-----------------------------------------------------------------------------------------------*/
 
 export const DEFAULT_PROJECT_NAME = 'Untitled';
-export const APP_NAME = 'Vetour';
+export const APP_NAME = 'Obsipano';
 export const FAZELSTUDIO_URL = 'https://fazelstudio.vercel.app';
 
 export const PROJECT_ID_PREFIX = 'proj_';
@@ -16,9 +16,9 @@ export const HOTSPOT_ID_PREFIX = 'hotspot_';
 export const ASSET_ID_PREFIX = 'asset_';
 export const TOAST_ID_PREFIX = 'toast_';
 
-export const STORAGE_KEY_PROJECTS = 'vetour-projects';
-export const STORAGE_KEY_THEME = 'vetour-theme';
-export const STORAGE_KEY_MEDIA_SETTINGS = 'vetour-media-settings';
+export const STORAGE_KEY_PROJECTS = 'obsipano-projects';
+export const STORAGE_KEY_THEME = 'obsipano-theme';
+export const STORAGE_KEY_MEDIA_SETTINGS = 'obsipano-media-settings';
 
 export const PRESENT_WINDOW_SIZE_RATIO = 0.7;
 export const PRESENT_WINDOW_MIN_RATIO = 0.6;
@@ -38,9 +38,9 @@ export const MAX_TOASTS = 5;
 export const MAX_RECENT_PROJECTS_HOME = 5;
 export const MAX_RECENT_PROJECTS_MODAL = 10;
 
-export const FILE_FILTER_NAME = 'Vetour Project';
-export const FILE_FILTER_EXTENSIONS = ['vetour'] as const;
-export const PLUGIN_FILE_FILTER_NAME = 'Vetour Plugin';
+export const FILE_FILTER_NAME = 'Obsipano Project';
+export const FILE_FILTER_EXTENSIONS = ['obsipano'] as const;
+export const PLUGIN_FILE_FILTER_NAME = 'Obsipano Plugin';
 export const PLUGIN_FILE_FILTER_EXTENSIONS = ['veix'] as const;
 
 export const MODAL_MAX_HEIGHT_RATIO = 0.7;

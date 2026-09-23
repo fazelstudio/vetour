@@ -7,8 +7,8 @@
  *  Headless functional test for the SDK package and its host adapter.
  *-----------------------------------------------------------------------------------------------*/
 
-import { defineExtension, Disposable, Emitter, type VetourAPI } from 'vetour-sdk';
-import { installSdkExtension, createVetourApi } from '../src/commands/sdkHost';
+import { defineExtension, Disposable, Emitter, type ObsipanoAPI } from 'obsipano-sdk';
+import { installSdkExtension, createObsipanoApi } from '../src/commands/sdkHost';
 import { createPluginPackage, validatePluginPackage, PluginPackageError } from '../src/lib/pluginPackage';
 import { executeCommand, listCommands } from '../src/commands/commandRegistry';
 import { listMenuContributions, listValidationRules } from '../src/commands/extensionApi';
@@ -57,7 +57,7 @@ async function section(name: string, fn: () => void | Promise<void>): Promise<vo
 
 /* Track host calls for lifecycle verification. */
 const seen: string[] = [];
-let activatedApi: VetourAPI | null = null;
+let activatedApi: ObsipanoAPI | null = null;
 let deactivated = false;
 
 const manifest = defineExtension({
@@ -116,7 +116,7 @@ await section('install-and-commands', async () => {
   const dispose = installSdkExtension(manifest);
   assert('activate receives the API', activatedApi !== null);
   assert('extension command is registered', listCommands().includes('sdk-test.ping' as never));
-  const api = activatedApi as VetourAPI;
+  const api = activatedApi as ObsipanoAPI;
   const reply = await api.commands.executeCommand<string>('sdk-test.ping', { echo: 'hi' });
   assert('extension command executes through the bus', reply === 'pong:hi');
   let blocked = false;
@@ -144,7 +144,7 @@ await section('install-and-commands', async () => {
 });
 
 await section('tour-namespace', async () => {
-  const api = activatedApi as VetourAPI;
+  const api = activatedApi as ObsipanoAPI;
   await api.commands.executeCommand('project.new', {});
   await api.tour.addScene({
     id: 'scene_a', panorama: 'a.jpg', name: 'A', links: [], markers: [],
@@ -183,7 +183,7 @@ await section('tour-namespace', async () => {
 });
 
 await section('assets-and-clipboard', async () => {
-  const api = activatedApi as VetourAPI;
+  const api = activatedApi as ObsipanoAPI;
   await api.tour.addAsset({ id: 'asset_1', name: 'pic.png', path: 'pic.png', type: 'image', size: 10, addedAt: new Date().toISOString() });
   await api.tour.renameAsset('asset_1', 'photo.png');
   let project = await api.workspace.getProject();
@@ -206,7 +206,7 @@ await section('assets-and-clipboard', async () => {
 });
 
 await section('window-workspace-present-media', async () => {
-  const api = activatedApi as VetourAPI;
+  const api = activatedApi as ObsipanoAPI;
   const toastId = await api.window.showInformationMessage('Hello');
   assert('notify returns a toast id', typeof toastId === 'string' && toastId.length > 0);
   await api.window.showWarningMessage('Careful');
@@ -214,10 +214,10 @@ await section('window-workspace-present-media', async () => {
   assert('current theme reads stored preference', (await api.window.getTheme()) === 'system');
   await api.window.setTheme('dark');
   assert('theme set and resolve round-trip', (await api.window.getTheme()) === 'dark' && (await api.window.getResolvedTheme()) === 'dark');
-  const validation = await api.workspace.validateProject((await api.workspace.getProject()) as never as Parameters<VetourAPI['workspace']['validateProject']>[0]);
+  const validation = await api.workspace.validateProject((await api.workspace.getProject()) as never as Parameters<ObsipanoAPI['workspace']['validateProject']>[0]);
   assert('named graph passes including extension rules', validation.valid);
   await api.tour.addScene({ id: 'scene_nameless', panorama: 'c.jpg', links: [], markers: [] });
-  const flagged = await api.workspace.validateProject((await api.workspace.getProject()) as never as Parameters<VetourAPI['workspace']['validateProject']>[0]);
+  const flagged = await api.workspace.validateProject((await api.workspace.getProject()) as never as Parameters<ObsipanoAPI['workspace']['validateProject']>[0]);
   assert('extension validation rule contributes issues', !flagged.valid && flagged.issues.some((issue) => issue.code === 'sdk-empty-name'));
   await api.tour.deleteScene('scene_nameless');
   assert('recent list reads without crashing', Array.isArray(await api.workspace.getRecentProjects()));
@@ -235,7 +235,7 @@ await section('window-workspace-present-media', async () => {
 
 await section('plugin-package', () => {
   const official = validatePluginPackage(createPluginPackage({
-    kind: 'vetour-extension',
+    kind: 'obsipano-extension',
     id: 'fazelstudio.demo',
     name: 'Demo',
     version: '0.1.0',
@@ -252,11 +252,11 @@ await section('plugin-package', () => {
   };
   assert('non-plugin bytes are rejected', badMagic('', new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])) === 'bad-magic');
   const tampered = createPluginPackage({
-    kind: 'vetour-extension', id: 'x.y', name: 'X', version: '0.1.0', publisher: 'someone',
+    kind: 'obsipano-extension', id: 'x.y', name: 'X', version: '0.1.0', publisher: 'someone',
   });
   assert('unofficial publisher is rejected', badMagic('', tampered) === 'untrusted-publisher');
   const future = createPluginPackage({
-    kind: 'vetour-extension', id: 'fazelstudio.demo', name: 'Demo', version: '0.1.0', publisher: 'fazelstudio',
+    kind: 'obsipano-extension', id: 'fazelstudio.demo', name: 'Demo', version: '0.1.0', publisher: 'fazelstudio',
   }).slice();
   new DataView(future.buffer).setUint32(4, 999, true);
   assert('future format version is rejected', badMagic('', future) === 'unsupported-version');
@@ -277,7 +277,7 @@ await section('uninstall', async () => {
     gone = true;
   }
   assert('unregistered command throws', gone);
-  const api = createVetourApi();
+  const api = createObsipanoApi();
   assert('uninstalled extension disappears from list', !(await api.extensions.all()).some((item) => item.id === 'sdk-test.demo'));
 });
 

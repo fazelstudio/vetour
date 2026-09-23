@@ -78,7 +78,7 @@ export function qualityToCrf(quality: number): number {
 
 export function loadMediaSettings(): MediaSettings {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY_MEDIA_SETTINGS);
+    const raw = localStorage.getItem(STORAGE_KEY_MEDIA_SETTINGS) ?? localStorage.getItem('vetour-media-settings');
     if (!raw) return structuredClone(DEFAULT_MEDIA_SETTINGS);
     const parsed = JSON.parse(raw) as Partial<MediaSettings>;
     return {

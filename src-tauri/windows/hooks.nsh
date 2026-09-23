@@ -1,9 +1,9 @@
 !macro NSIS_HOOK_POSTINSTALL
-  ; Register .vetour file icon
-  WriteRegStr HKCR ".vetour" "" "vetourfile"
-  WriteRegStr HKCR "vetourfile" "" "Vetour Project"
-  WriteRegStr HKCR "vetourfile\DefaultIcon" "" "$INSTDIR\vetour-file.ico"
-  WriteRegStr HKCR "vetourfile\shell\open\command" "" '"$INSTDIR\${MAINEXECUTABLE}" "%1"'
+  ; Register .obsipano file icon
+  WriteRegStr HKCR ".obsipano" "" "obsipanofile"
+  WriteRegStr HKCR "obsipanofile" "" "Obsipano Project"
+  WriteRegStr HKCR "obsipanofile\DefaultIcon" "" "$INSTDIR\obsipano-file.ico"
+  WriteRegStr HKCR "obsipanofile\shell\open\command" "" '"$INSTDIR\${MAINEXECUTABLE}" "%1"'
   
   ; Refresh shell icons to apply file association icon immediately
   System::Call 'shell32.dll::SHChangeNotify(i 0x08000000, i 0, i 0, i 0)'
@@ -19,9 +19,9 @@
 !macroend
 
 !macro NSIS_HOOK_POSTUNINSTALL
-  ; Remove .vetour file association
-  DeleteRegKey HKCR ".vetour"
-  DeleteRegKey HKCR "vetourfile"
+  ; Remove .obsipano file association
+  DeleteRegKey HKCR ".obsipano"
+  DeleteRegKey HKCR "obsipanofile"
 
   ; Refresh shell icons
   System::Call 'shell32.dll::SHChangeNotify(i 0x08000000, i 0, i 0, i 0)'

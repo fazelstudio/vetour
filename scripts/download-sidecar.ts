@@ -17,7 +17,7 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const REPO = 'fazelstudio/vetour';
+const REPO = 'fazelstudio/obsipano';
 const VERSION = process.env.SIDECAR_VERSION || 'ffmpeg-sidecar-v1';
 const SIDECAR_DIR = join(__dirname, '..', 'src-tauri', 'binaries');
 

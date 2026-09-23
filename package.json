@@ -1,5 +1,5 @@
 {
-  "name": "vetour",
+  "name": "obsipano",
   "private": true,
   "version": "1.0.0",
   "type": "module",
@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "check": "tsc --noEmit && tsc --noEmit -p packages/vetour-sdk",
+    "check": "tsc --noEmit && tsc --noEmit -p packages/obsipano-sdk",
     "lint": "eslint .",
     "preview": "vite preview",
     "tauri": "tauri",
@@ -47,7 +47,7 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@tauri-apps/cli": "^2",
-    "vetour-sdk": "workspace:*",
+    "obsipano-sdk": "workspace:*",
     "@types/node": "^26.1.0",
     "@types/pako": "^2.0.4",
     "@types/papaparse": "^5.5.2",

@@ -20,7 +20,8 @@ guarantees that only official packages pass the gate today.
 export const TRUSTED_PLUGIN_PUBLISHERS: readonly string[] = ['fazelstudio'];
 
 export interface PluginManifest {
-  kind: 'vetour-extension';
+  // The legacy Vetour marker is still accepted when reading, but new files use Obsipano.
+  kind: 'obsipano-extension' | 'vetour-extension';
   id: string;
   name: string;
   version: string;
@@ -81,16 +82,16 @@ export function createPluginPackage(manifest: PluginManifest): Uint8Array {
 // Parse and fully validate a .veix buffer, rejecting anything unofficial.
 export function validatePluginPackage(data: Uint8Array): PluginManifest {
   if (data.length < 12) {
-    throw new PluginPackageError('truncated', 'This file is too small to be a Vetour plugin.');
+    throw new PluginPackageError('truncated', 'This file is too small to be an Obsipano plugin.');
   }
   const magic = data.slice(0, 4);
   const matches = magic.length === PLUGIN_MAGIC.length && magic.every((value, index) => value === PLUGIN_MAGIC[index]);
   if (!matches) {
-    throw new PluginPackageError('bad-magic', 'This is not an official Vetour plugin file (.veix).');
+    throw new PluginPackageError('bad-magic', 'This is not an official Obsipano plugin file (.veix).');
   }
   const version = readU32(data, 4);
   if (version !== PLUGIN_FORMAT_VERSION) {
-    throw new PluginPackageError('unsupported-version', `Plugin format v${version} is not supported by this Vetour release.`);
+    throw new PluginPackageError('unsupported-version', `Plugin format v${version} is not supported by this Obsipano release.`);
   }
   const jsonLength = readU32(data, 8);
   if (8 + 4 + jsonLength > data.length) {
@@ -103,8 +104,8 @@ export function validatePluginPackage(data: Uint8Array): PluginManifest {
   } catch {
     throw new PluginPackageError('bad-manifest', 'The plugin manifest is corrupted and cannot be read.');
   }
-  if (manifest?.kind !== 'vetour-extension') {
-    throw new PluginPackageError('bad-manifest', 'The plugin manifest is missing the Vetour extension marker.');
+  if (manifest?.kind !== 'obsipano-extension' && manifest?.kind !== 'vetour-extension') {
+    throw new PluginPackageError('bad-manifest', 'The plugin manifest is missing the Obsipano extension marker.');
   }
   for (const field of ['id', 'name', 'version', 'publisher'] as const) {
     if (typeof manifest[field] !== 'string' || manifest[field].trim() === '') {
@@ -114,7 +115,7 @@ export function validatePluginPackage(data: Uint8Array): PluginManifest {
   if (!isTrustedPublisher(manifest.publisher)) {
     throw new PluginPackageError(
       'untrusted-publisher',
-      `Publisher "${manifest.publisher}" is not an official Vetour publisher. Only official plugins can be installed.`,
+      `Publisher "${manifest.publisher}" is not an official Obsipano publisher. Only official plugins can be installed.`,
     );
   }
   return manifest;

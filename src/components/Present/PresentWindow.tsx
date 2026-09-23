@@ -15,7 +15,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { emit, listen } from '@tauri-apps/api/event';
 import { getAssetUrl } from '@/lib/panorama';
 import { DocumentRenderer } from './DocumentRenderer';
-import { blobUrlCache } from '@/lib/vetourFile';
+import { blobUrlCache } from '@/lib/obsipanoFile';
 import { Play, Pause, X, Music, Loader2 } from 'lucide-react';
 import { ScrollArea } from '../ui/scroll-area';
 

@@ -8,7 +8,7 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability within Vetour, please report it privately via email to the project maintainer. **Do not disclose vulnerabilities publicly until they have been addressed.**
+If you discover a security vulnerability within Obsipano, please report it privately via email to the project maintainer. **Do not disclose vulnerabilities publicly until they have been addressed.**
 
 To report a vulnerability:
 
@@ -39,4 +39,4 @@ The following are not considered security vulnerabilities:
 
 If possible, please encrypt sensitive vulnerability reports using the maintainer's PGP key (if available).
 
-We appreciate your help in keeping Vetour and its users safe.
+We appreciate your help in keeping Obsipano and its users safe.

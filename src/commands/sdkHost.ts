@@ -6,7 +6,7 @@
  *  Host adapter implementing the SDK API over the command registry.
  *-----------------------------------------------------------------------------------------------*/
 
-import { Disposable, type ExtensionContext as SdkContext, type ExtensionManifest as SdkManifest, type VetourAPI } from 'vetour-sdk';
+import { Disposable, type ExtensionContext as SdkContext, type ExtensionManifest as SdkManifest, type ObsipanoAPI } from 'obsipano-sdk';
 import {
   executeCommand,
   listCommands,
@@ -18,13 +18,13 @@ import {
   listInstalledExtensions,
   onExtensionEvent,
   type ExtensionContributions,
-  type VetourExtension,
+  type ObsipanoExtension,
 } from './extensionApi';
 import { useProjectListStore } from '@/store/projectListStore';
 import { command, registerCoreCommands } from './registerCoreCommands';
 
 /* Build the namespaced API object handed to extension activate functions. */
-export function createVetourApi(): VetourAPI {
+export function createObsipanoApi(): ObsipanoAPI {
   // Core commands must exist before any extension call, independent of UI render order.
   registerCoreCommands();
   return {
@@ -192,9 +192,9 @@ export function createVetourApi(): VetourAPI {
 
 /* Adapt an SDK manifest to the host installer without changing its semantics. */
 export function installSdkExtension(manifest: SdkManifest): () => void {
-  const api = createVetourApi();
+  const api = createObsipanoApi();
   const context: SdkContext = { extensionId: manifest.id, subscriptions: [] };
-  const extension: VetourExtension = {
+  const extension: ObsipanoExtension = {
     id: manifest.id,
     name: manifest.name,
     version: manifest.version,
@@ -218,3 +218,9 @@ export function installSdkExtension(manifest: SdkManifest): () => void {
   };
   return installExtension(extension);
 }
+
+/*
+Legacy Vetour-era alias kept for backward compatibility.
+New code must use createObsipanoApi.
+*/
+export const createVetourApi = createObsipanoApi;
